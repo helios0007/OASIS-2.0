@@ -1,0 +1,71 @@
+"""Parameter sweep: simulate every combination of the levels in
+params.SWEEP_LEVELS and save the safe-hours results.
+
+Writes outputs/sweep.csv        one row per design (parameters + results)
+       outputs/sweep_hourly.csv hourly indoor heat index per design
+Run:   python run_sweep.py
+"""
+import itertools
+import os
+import shutil
+import time
+from concurrent.futures import ProcessPoolExecutor
+
+import pandas as pd
+
+import config
+from oasis.params import BASELINE, ROOF_ONLY, SWEEP_LEVELS
+
+SWEEP_DIR = config.OUT / "sweep_runs"   # temporary, deleted at the end
+
+
+def all_designs():
+    """Every combination of the sweep levels, as parameter dictionaries.
+    On a middle floor the roof choices do nothing, so they are kept at
+    their first level only (no duplicate runs)."""
+    names = list(SWEEP_LEVELS)
+    designs = []
+    for values in itertools.product(*SWEEP_LEVELS.values()):
+        p = dict(BASELINE, **dict(zip(names, values)))
+        if p["floor"] == "middle" and any(
+                p[k] != SWEEP_LEVELS[k][0] for k in ROOF_ONLY):
+            continue
+        p["name"] = f"d{len(designs):04d}"
+        designs.append(p)
+    return designs
+
+
+def run_one(p):
+    """Build, simulate and rate one design. Runs in a worker process."""
+    from oasis.build_idf import build_idf
+    from oasis.metrics import safe_hours
+    from oasis.simulate import run
+
+    run_dir = SWEEP_DIR / p["name"]
+    idf = build_idf(p, SWEEP_DIR / f"{p['name']}.idf")
+    summary, hourly = safe_hours(run(idf, run_dir))
+    shutil.rmtree(run_dir, ignore_errors=True)      # keep the disk clean
+    idf.unlink(missing_ok=True)
+    row = {k: p[k] for k in ["name", *SWEEP_LEVELS]}
+    return {**row, **summary}, hourly["heat_index"].round(1).tolist()
+
+
+def main():
+    designs = all_designs()
+    print(f"{len(designs)} designs to simulate")
+    SWEEP_DIR.mkdir(parents=True, exist_ok=True)
+    start = time.time()
+
+    with ProcessPoolExecutor(max_workers=os.cpu_count()) as pool:
+        results = list(pool.map(run_one, designs, chunksize=8))
+
+    rows = [r for r, _ in results]
+    pd.DataFrame(rows).to_csv(config.OUT / "sweep.csv", index=False)
+    hourly = pd.DataFrame([h for _, h in results], index=[r["name"] for r in rows])
+    hourly.to_csv(config.OUT / "sweep_hourly.csv", index_label="name")
+    shutil.rmtree(SWEEP_DIR, ignore_errors=True)
+    print(f"Done in {time.time() - start:.0f} s -> {config.OUT / 'sweep.csv'}")
+
+
+if __name__ == "__main__":
+    main()

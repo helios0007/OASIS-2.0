@@ -1,0 +1,24 @@
+Weather file: dhaka_2016.epw (0 station hours missing overall)
+single brick: 6 homes, occupants 4, night vent True, loggers 10692994, 10706822, 10706838, 10706880, 10706889, 10730029
+double brick: 6 homes, occupants 5, night vent True, loggers 10693003, 10706819, 10706823, 10706824, 10706841, 10706910
+Simulating 450 runs ((5, 13) to (8, 31)) ...
+
+Best settings (one set for both groups): {'airflow_factor': 1.6, 'infiltration_ach': 8.0, 'appliances_peak_w': 200, 'internal_mass_m2': 80}
+Current settings: {'airflow_factor': 0.2, 'infiltration_ach': 1.0, 'appliances_peak_w': 600.0, 'internal_mass_m2': 0.0}
+  single brick  current    fit RMSE 3.55 bias +3.13 | check RMSE 3.08 bias +2.53 | swing 5.5 vs 2.7 | peak 18h vs 16h | ACH 1.8
+  single brick  calibrated fit RMSE 0.99 bias +0.16 | check RMSE 0.94 bias -0.00 | swing 4.3 vs 2.7 | peak 14h vs 16h | ACH 14.3
+  double brick  current    fit RMSE 3.87 bias +3.63 | check RMSE 3.44 bias +3.16 | swing 4.1 vs 2.2 | peak 18h vs 17h | ACH 1.8
+  double brick  calibrated fit RMSE 1.03 bias +0.48 | check RMSE 0.92 bias +0.47 | swing 3.8 vs 2.2 | peak 14h vs 17h | ACH 14.3
+
+Top 10 settings by fit RMSE:
+airflow_factor  infiltration_ach  appliances_peak_w  internal_mass_m2
+1.6             8.0               200                80                  1.01
+                                  400                80                  1.04
+                                  600                80                  1.07
+                                  200                40                  1.08
+                                  400                40                  1.10
+0.8             8.0               200                80                  1.11
+1.6             8.0               600                40                  1.12
+0.8             8.0               200                40                  1.15
+                                  400                80                  1.16
+                                                     40                  1.19

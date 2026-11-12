@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Editor
+.vscode/
+
+# EnergyPlus run folders and temporary models (regenerate with the run_*.py scripts)
+outputs/test_run/
+outputs/live_runs/
+outputs/sweep_runs/
+outputs/calibration/runs/
+outputs/baseline/
+outputs/cool_roof/
+outputs/roof_insul/
+outputs/shade_nightvent/
+outputs/*.idf
+*.eso
+*.audit
+*.rdd
+*.mdd
+*.bnd
+*.eio
+*.shd
+*.mtr
+*.mtd

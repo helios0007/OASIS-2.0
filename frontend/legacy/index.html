@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OASIS 2.0 · Environmental & Thermal Simulation Workbench</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="style.css?v=4.0">
+</head>
+<body>
+<div class="workbench">
+
+  <!-- ==================== TOP COMMAND BAR ==================== -->
+  <header class="cmd-bar">
+    <div class="cmd-brand">
+      <div class="cmd-logo" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="28" height="28">
+          <defs>
+            <linearGradient id="oasisGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#06b6d4"/>
+              <stop offset="50%" stop-color="#10b981"/>
+              <stop offset="100%" stop-color="#f59e0b"/>
+            </linearGradient>
+          </defs>
+          <polygon points="16,2 29,9.5 29,22.5 16,30 3,22.5 3,9.5" fill="rgba(6,182,212,0.14)" stroke="url(#oasisGrad)" stroke-width="1.8"/>
+          <polyline points="3,9.5 16,17 29,9.5" fill="none" stroke="url(#oasisGrad)" stroke-width="1.5"/>
+          <line x1="16" y1="17" x2="16" y2="30" stroke="url(#oasisGrad)" stroke-width="1.5"/>
+          <circle cx="16" cy="9.5" r="2.4" fill="#fbbf24"/>
+        </svg>
+      </div>
+      <div class="cmd-title-group">
+        <div class="cmd-name">OASIS <span class="cmd-ver">2.0 STUDIO</span></div>
+        <div class="cmd-sub" id="scenario-pills">Chennai · 10–16 May Heatwave · 20:00–21:00 Power Cut</div>
+      </div>
+    </div>
+
+    <div class="cmd-presets">
+      <span class="cmd-lbl">Scenarios:</span>
+      <button type="button" class="preset-chip active" data-preset="baseline">Baseline Top-Floor</button>
+      <button type="button" class="preset-chip" data-preset="cool_roof">+ Cool White Roof</button>
+      <button type="button" class="preset-chip" data-preset="passive_bundle">+ Full Passive Bundle</button>
+      <button type="button" class="preset-chip" data-preset="middle_floor">Middle-Floor Flat</button>
+      <button type="button" class="preset-chip chip-rhino" id="btn-sample-rhino" title="Load bundled sample_flat.3dm Rhino 3D model">
+        📦 Load Sample .3dm
+      </button>
+    </div>
+
+    <div class="cmd-right">
+      <div class="engine-pill" id="status" role="status">
+        <span class="engine-dot"></span>
+        <span id="status-text">EnergyPlus 26.2 Ready</span>
+      </div>
+      <button type="button" class="cmd-btn" id="btn-open-modal" title="View Full Sensitivity Matrix, Dhaka Logger Calibration & Surrogate ML">
+        📊 Matrix & Validation
+      </button>
+      <button type="button" class="cmd-btn" id="reset" title="Reset all parameters to PMAY Baseline">↺ Reset</button>
+      <button type="button" class="cmd-btn" id="theme-toggle" title="Switch Dark / Light CAD Theme">
+        <span id="theme-icon">☀</span> <span id="theme-label">Light</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ==================== 3-PANE WORKBENCH BODY ==================== -->
+  <div class="wb-body">
+
+    <!-- ==================== LEFT PANE: PARAMETER INSPECTOR ==================== -->
+    <aside class="pane-left">
+
+      <!-- 1. RHINO 3D CAD BRIDGE -->
+      <div class="insp-section">
+        <div class="insp-head">
+          <span class="insp-tag">CAD</span>
+          <h3>Rhino 3D Geometry (.3dm)</h3>
+          <span class="insp-pill" id="geom-pill">30.0 m² · 90 m³</span>
+        </div>
+
+        <div class="cad-drop" id="drop">
+          <input type="file" id="file" accept=".3dm">
+          <div class="cad-drop-row">
+            <span class="cad-icon">📐</span>
+            <div>
+              <div class="cad-drop-title">Drop <code>.3dm</code> file or <u>browse</u></div>
+              <div class="cad-drop-sub">Layers: <code>room</code> (box) &amp; <code>window</code> (glass)</div>
+            </div>
+          </div>
+        </div>
+        <div class="rhino-loaded" id="model" hidden></div>
+        <div class="alert-error" id="upload-error" hidden></div>
+      </div>
+
+      <!-- 2. PARAMETRIC DIMENSIONS & ORIENTATION -->
+      <div class="insp-section">
+        <div class="insp-head">
+          <span class="insp-tag">01</span>
+          <h3>Spatial Dimensions & Glazing</h3>
+        </div>
+
+        <fieldset id="geometry" class="geom-fieldset">
+          <div class="param-sliders">
+            <div class="param-row">
+              <div class="param-top">
+                <label for="length_m">Length (East–West)</label>
+                <div class="num-box"><input type="number" id="length_m" min="2" max="30" step="0.1"><span>m</span></div>
+              </div>
+              <input type="range" id="range_length_m" min="2.5" max="15" step="0.1">
+            </div>
+
+            <div class="param-row">
+              <div class="param-top">
+                <label for="width_m">Width (North–South)</label>
+                <div class="num-box"><input type="number" id="width_m" min="2" max="30" step="0.1"><span>m</span></div>
+              </div>
+              <input type="range" id="range_width_m" min="2.5" max="15" step="0.1">
+            </div>
+
+            <div class="param-row">
+              <div class="param-top">
+                <label for="height_m">Ceiling Height</label>
+                <div class="num-box"><input type="number" id="height_m" min="2.2" max="6" step="0.1"><span>m</span></div>
+              </div>
+              <input type="range" id="range_height_m" min="2.4" max="4.5" step="0.1">
+            </div>
+
+            <div class="param-row">
+              <div class="param-top">
+                <label for="wwr_pct">Window-to-Wall Ratio (N &amp; S)</label>
+                <div class="num-box"><input type="number" id="wwr_pct" min="0" max="60" step="1"><span>%</span></div>
+              </div>
+              <input type="range" id="range_wwr_pct" min="5" max="50" step="1">
+            </div>
+          </div>
+
+          <div class="orient-group">
+            <span class="field-lbl">Building Orientation (Primary Glazing Axis)</span>
+            <div class="seg-grid two-col">
+              <label class="seg-option">
+                <input type="radio" name="orientation_deg" value="0" checked>
+                <span class="seg-card">
+                  <span class="seg-icon">🧭 0° N / S</span>
+                  <span class="seg-sub">Windows face North &amp; South</span>
+                </span>
+              </label>
+              <label class="seg-option">
+                <input type="radio" name="orientation_deg" value="90">
+                <span class="seg-card">
+                  <span class="seg-icon">☀ 90° E / W</span>
+                  <span class="seg-sub">Windows face East &amp; West</span>
+                </span>
+              </label>
+            </div>
+          </div>
+          <span class="hint-banner" id="geometry-hint" hidden>Locked to Rhino <code>.3dm</code> geometry. Remove model above to edit sliders.</span>
+        </fieldset>
+      </div>
+
+      <!-- 3. ENVELOPE CONSTRUCTIONS & PASSIVE CONTROLS -->
+      <div class="insp-section">
+        <div class="insp-head">
+          <span class="insp-tag">02</span>
+          <h3>Envelope &amp; Passive Systems</h3>
+        </div>
+        <form id="inputs" autocomplete="off">
+          <div id="choices" class="choices-stack"></div>
+        </form>
+      </div>
+
+      <!-- 4. BUILDING PHYSICS & THERMODYNAMIC PROPERTIES -->
+      <div class="insp-section">
+        <div class="insp-head">
+          <span class="insp-tag">⚡</span>
+          <h3>Envelope Physics (SI)</h3>
+        </div>
+        <div class="physics-grid" id="physics-grid"></div>
+      </div>
+
+    </aside>
+
+    <!-- ==================== CENTER PANE: 3D STAGE & ANALYTICS ==================== -->
+    <main class="pane-center" id="out">
+      <div class="alert-error" id="error" hidden></div>
+
+      <!-- TOP KPI TELEMETRY RIBBON -->
+      <section class="telemetry-ribbon" id="figs" aria-live="polite"></section>
+
+      <!-- INTERACTIVE 3D SUN-PATH & AXONOMETRIC VIEWPORT -->
+      <section class="viewport-card">
+        <div class="vp-Overlay-top">
+          <div class="vp-title-pill">
+            <span class="vp-dot"></span>
+            <b>3D Spatial &amp; Solar Twin</b>
+            <span class="vp-hint">(Drag to orbit 3D view · Click timeline to scrub)</span>
+          </div>
+          <div class="vp-cam-bar">
+            <button type="button" class="cam-btn active" data-cam="iso">Iso 3D</button>
+            <button type="button" class="cam-btn" data-cam="south">South Elev</button>
+            <button type="button" class="cam-btn" data-cam="top">Plan View</button>
+            <button type="button" class="cam-btn active" id="btn-explode-roof" title="Float roof assembly to inspect interior thermal floor">Explode Roof</button>
+          </div>
+        </div>
+
+        <div class="vp-main-grid">
+          <div class="vp-canvas-wrap" id="axon-stage">
+            <svg id="axon-svg" viewBox="0 0 720 350" role="img" aria-label="Interactive 3D building and solar path viewport"></svg>
+            <div class="vp-colorbar">
+              <span>Safe 30°C</span>
+              <div class="vp-cbar-grad"></div>
+              <span>41°C Danger</span>
+              <div class="vp-cbar-grad-hot"></div>
+              <span>50°C+</span>
+            </div>
+          </div>
+
+          <!-- LIVE HOUR TELEMETRY HUD -->
+          <div class="vp-hud">
+            <div class="hud-clock-box">
+              <div class="hud-date" id="hud-day">10 May · Day 1 of 7</div>
+              <div class="hud-hour" id="hud-time">14:00 – 15:00</div>
+              <div class="hud-badge" id="hud-band">DANGER ZONE</div>
+            </div>
+
+            <div class="hud-readouts">
+              <div class="hud-row hud-row-hi">
+                <span>Felt Heat Index</span>
+                <strong id="hud-hi">-- °C</strong>
+              </div>
+              <div class="hud-row">
+                <span>Indoor Air ($T_{\text{in}}$)</span>
+                <strong id="hud-tin">-- °C</strong>
+              </div>
+              <div class="hud-row">
+                <span>Rel. Humidity ($\text{RH}$)</span>
+                <strong id="hud-rh">-- %</strong>
+              </div>
+              <div class="hud-row">
+                <span>Outdoor Air ($T_{\text{out}}$)</span>
+                <strong id="hud-tout">-- °C</strong>
+              </div>
+              <div class="hud-row">
+                <span>Ceiling Fan</span>
+                <strong id="hud-fan">-2.0 °C</strong>
+              </div>
+            </div>
+
+            <div class="hud-jumps">
+              <button type="button" class="jump-pill" id="jump-peak" title="Jump to hottest hour of the week">🔥 Peak HI</button>
+              <button type="button" class="jump-pill" id="jump-cut" title="Jump to 20:00–21:00 nightly power cut">⚡ 20:00 Cut</button>
+              <button type="button" class="jump-pill" id="jump-cool" title="Jump to 06:00 morning minimum">🌅 06:00 Cool</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 168-HOUR TIME MACHINE SCRUBBER WITH HEAT-INDEX BARCODE -->
+        <div class="time-machine-bar">
+          <button type="button" class="tm-play" id="play-btn" title="Play / Pause 168-Hour Simulation">
+            <span id="play-icon">▶</span>
+          </button>
+          <div class="tm-track-col">
+            <input type="range" id="hour-scrubber" min="0" max="167" value="14">
+            <div class="tm-barcode" id="tm-barcode"></div>
+            <div class="tm-days">
+              <span>10 May</span><span>11 May</span><span>12 May</span><span>13 May</span><span>14 May</span><span>15 May</span><span>16 May</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- BOTTOM MULTI-ANALYTICS DOCK -->
+      <section class="analytics-dock" id="chart-panel" hidden>
+        <div class="dock-tabs-bar">
+          <div class="view-tabs" role="tablist">
+            <button type="button" class="tab-btn active" data-view="timeline">📈 168h Heatwave Timeline</button>
+            <button type="button" class="tab-btn" data-view="psychro">🌡 CBE Psychrometric Comfort</button>
+            <button type="button" class="tab-btn" data-view="heatmap">🟧 7×24h Thermal Barcode</button>
+            <button type="button" class="tab-btn" data-view="diurnal">🔄 24h Diurnal Lag &amp; Bands</button>
+          </div>
+
+          <div class="dock-controls" id="timeline-controls">
+            <div class="legend" id="legend"></div>
+            <div class="chart-toggles">
+              <label class="toggle-pill"><input type="checkbox" id="chk-tout" checked><span>$T_{\text{out}}$</span></label>
+              <label class="toggle-pill"><input type="checkbox" id="chk-tin"><span>$T_{\text{in}}$</span></label>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 1: 168H TIMELINE -->
+        <div id="view-timeline" class="analytics-pane">
+          <div id="chart"><div id="tip" hidden></div></div>
+        </div>
+
+        <!-- TAB 2: PSYCHROMETRIC COMFORT CHART -->
+        <div id="view-psychro" class="analytics-pane" hidden>
+          <div class="psychro-layout">
+            <div id="psychro-chart"></div>
+            <div class="psychro-info" id="psychro-info"></div>
+          </div>
+        </div>
+
+        <!-- TAB 3: 7x24 CARPET HEATMAP -->
+        <div id="view-heatmap" class="analytics-pane" hidden>
+          <div class="carpet-bar">
+            <span class="sub">Rows: 10–16 May · Columns: 00:00–23:00 (Gold frame = 20:00 Power Cut). Click any cell to inspect hour in 3D.</span>
+            <div class="seg-mini">
+              <button type="button" class="mini-btn active" data-hm="you">Your Design (°C)</button>
+              <button type="button" class="mini-btn" data-hm="top">With Top Change (°C)</button>
+              <button type="button" class="mini-btn" data-hm="delta">Cooling Δ (°C)</button>
+            </div>
+          </div>
+          <div id="heatmap-container"></div>
+        </div>
+
+        <!-- TAB 4: 24H DIURNAL & COMFORT BANDS -->
+        <div id="view-diurnal" class="analytics-pane" hidden>
+          <div class="diurnal-grid">
+            <div class="diurnal-chart-box">
+              <h4>Mean 24-Hour Diurnal Cycle (Thermal Lag &amp; 20:00 Cut Spike)</h4>
+              <div id="diurnal-chart"></div>
+            </div>
+            <div class="comfort-bands-box">
+              <h4>NWS Heat Index Autonomy Breakdown (168 Hours)</h4>
+              <div id="comfort-bands"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ==================== RIGHT PANE: PASSIVE STRATEGY STACK ==================== -->
+    <aside class="pane-right" id="changes-panel" hidden>
+      <div class="right-head">
+        <div>
+          <span class="eyebrow-accent">Decision-Support Ranking</span>
+          <h2>Passive Cooling Strategies</h2>
+        </div>
+        <button type="button" class="btn-optimize" id="apply-all-btn" hidden>
+          ✨ Stack All Positive
+        </button>
+      </div>
+
+      <!-- Autonomy Progress Thermometer -->
+      <div class="autonomy-box" id="autonomy-box"></div>
+
+      <!-- Ranked Intervention Cards -->
+      <div class="interv-scroll" id="changes"></div>
+
+      <!-- Validation & Surrogate Summary Footer -->
+      <div class="validation-mini" id="validation-mini"></div>
+    </aside>
+
+  </div>
+
+  <!-- ==================== FULL MATRIX & VALIDATION MODAL ==================== -->
+  <div class="modal-backdrop" id="matrix-modal" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <span class="eyebrow-accent">Complete Single-Parameter Sensitivity &amp; Validation</span>
+          <h2>Simulation Matrix, Dhaka Logger Calibration &amp; XGBoost Surrogate</h2>
+        </div>
+        <button type="button" class="cmd-btn" id="btn-close-modal">✕ Close</button>
+      </div>
+      <div class="modal-body">
+        <div class="method-grid" id="method-grid"></div>
+        <h3 style="margin:16px 0 8px">All Simulated Single-Parameter Variations</h3>
+        <div class="tablewrap"><table id="table"></table></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script src="app.js?v=4.0"></script>
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OASIS · Overheating Check</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+  <link rel="stylesheet" href="style.css?v=6.1">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="wordmark">OASIS</span>
+    <span class="brand-sub">Overheating check for free-running flats</span>
+  </div>
+  <p class="scenario" id="scenario">Chennai · 10–16 May heatwave · power cut 20:00–21:00 nightly</p>
+  <div class="topbar-right">
+    <span class="engine" id="engine" role="status"><i></i><span id="engine-text">Connecting…</span></span>
+    <button type="button" class="ghost" id="theme" aria-label="Toggle dark mode">Dark</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ============ INPUT SHEET ============ -->
+  <aside class="sheet" aria-label="Design inputs">
+    <form id="form" autocomplete="off">
+
+      <section class="block">
+        <h2><span class="num">01</span>Room</h2>
+
+        <div class="drop" id="drop">
+          <input type="file" id="file" accept=".3dm" aria-label="Upload Rhino .3dm model">
+          <div class="drop-text">
+            <strong>Import Rhino .3dm</strong>
+            <span>layers <code>room</code> + <code>window</code> · or <button type="button" class="link" id="sample">use sample flat</button></span>
+          </div>
+        </div>
+        <div class="model" id="model" hidden></div>
+        <p class="error" id="upload-error" hidden></p>
+
+        <div class="fields" id="geometry">
+          <label class="field"><span>Length <em>E–W</em></span><span class="unit-input"><input type="number" id="length_m" min="2" max="30" step="0.1"><i>m</i></span></label>
+          <label class="field"><span>Width <em>N–S</em></span><span class="unit-input"><input type="number" id="width_m" min="2" max="30" step="0.1"><i>m</i></span></label>
+          <label class="field"><span>Ceiling</span><span class="unit-input"><input type="number" id="height_m" min="2.2" max="6" step="0.1"><i>m</i></span></label>
+          <label class="field"><span>Window / wall</span><span class="unit-input"><input type="number" id="wwr_pct" min="0" max="60" step="1"><i>%</i></span></label>
+        </div>
+        <div class="choice" data-key="orientation_deg">
+          <span class="choice-title">Windows face</span>
+          <div class="seg" id="seg-orientation_deg"></div>
+        </div>
+        <p class="area" id="area"></p>
+      </section>
+
+      <section class="block">
+        <h2><span class="num">02</span>Envelope</h2>
+        <div id="envelope"></div>
+      </section>
+
+      <section class="block">
+        <h2><span class="num">03</span>Position &amp; use</h2>
+        <div id="use"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head">
+          <h2><span class="num">04</span>Household (body check)</h2>
+          <button type="button" class="ghost sm" id="add-agent">+ Add person</button>
+        </div>
+        <p class="block-sub">Each adult is run through the JOS-3 body model with the room air, radiant temperature and humidity from EnergyPlus. Children are listed but not modelled: JOS-3 is an adult model and no validated child heat model exists, so the heat-index safe hours cover them.</p>
+        <div class="agent-roster" id="agent-roster"></div>
+      </section>
+
+    </form>
+
+    <div class="run-bar">
+      <button type="button" class="run" id="run">Simulate week</button>
+      <span class="run-note" id="run-note">EnergyPlus · design + every single change</span>
+    </div>
+  </aside>
+
+  <!-- ============ RESULT ============ -->
+  <main class="result" id="result" aria-live="polite">
+
+    <div class="empty" id="empty">
+      <p class="empty-title">Set up the flat, then simulate the week.</p>
+      <p>OASIS runs 168 hours of the May heatwave in EnergyPlus and counts the hours the indoor
+         felt temperature (heat index, with fan credit) stays below <b id="limit-a">41 °C</b>.
+         Then it tests every single design change and ranks them by hours gained.</p>
+    </div>
+
+    <p class="error" id="error" hidden></p>
+
+    <div id="output" hidden>
+      <!-- Verdict -->
+      <section class="verdict">
+        <div class="score">
+          <span class="score-num" id="score">–</span>
+          <span class="score-of">/ 168<br>safe hours</span>
+        </div>
+        <div class="verdict-text">
+          <p class="verdict-line" id="verdict-line"></p>
+          <dl class="facts" id="facts"></dl>
+          <p class="check" id="check" hidden></p>
+        </div>
+      </section>
+
+      <!-- Week -->
+      <section class="panel">
+        <header class="panel-head">
+          <h3>The week, hour by hour</h3>
+          <p class="readout" id="readout">Hover the week to read an hour.</p>
+        </header>
+        <div class="week" id="week" role="img" aria-label="Heat index for each hour of the week"></div>
+        <div class="week-legend">
+          <span><i class="sw sw-safe"></i>below the limit</span>
+          <span><i class="sw sw-hot"></i>above <span id="limit-b">41 °C</span>, darker is hotter</span>
+          <span><i class="sw sw-cut"></i>power cut, fan off</span>
+        </div>
+        <div class="chart" id="chart"></div>
+      </section>
+
+      <!-- Two peaks: the normal daily peak and the peak during a power cut -->
+      <section class="panel">
+        <header class="panel-head">
+          <h3>When a power cut hurts most</h3>
+          <p class="hint">Felt heat with the fan off, if a one-hour cut fell at each hour of the day. Same simulation, no extra runs.</p>
+        </header>
+        <p class="peaks-line" id="peaks-line"></p>
+        <div class="cutscan" id="cutscan" role="img" aria-label="Felt heat with the fan off at each hour of the day"></div>
+        <div class="week-legend">
+          <span><i class="sw sw-hot"></i>number = days of 7 above the limit with the fan off</span>
+          <span><i class="sw sw-cut"></i>the modelled power cut</span>
+          <span>▲ the room's hottest hour (normal peak)</span>
+        </div>
+      </section>
+
+      <!-- Check measure: the household through JOS-3 -->
+      <section class="panel" id="agents-panel">
+        <header class="panel-head">
+          <div>
+            <h3>The household through the week <span class="badge-jos3">check · JOS-3</span></h3>
+            <p class="hint">Scrub or play the week to see where each person is and how their body copes: core and skin temperature, skin wetness, sweat. Unsafe = core at or above 38.0 °C (ISO 7933:2023 limit).</p>
+          </div>
+          <div class="scrubber-bar">
+            <button type="button" class="ghost sm" id="play-btn">▶ Play week</button>
+            <input type="range" id="hour-slider" min="0" max="167" value="109" aria-label="Hour of the week">
+            <span class="scrubber-time" id="scrubber-time">14 May, 13:00</span>
+          </div>
+        </header>
+
+        <div class="live-space-grid">
+          <!-- Interactive 3D/Spatial Room with Live Moving Agents & Speech Bubbles -->
+          <div class="room-stage-card">
+            <div class="room-stage-head">
+              <span id="room-stage-title">Spatial Zone Map · Top Floor</span>
+              <span class="fan-badge" id="fan-badge"> Ceiling Fan ON (0.85 m/s)</span>
+            </div>
+            <div class="room-svg-wrap" id="room-stage"></div>
+            <div class="room-stage-foot">
+              <span><i class="dot st-safe"></i>Core below 37.5 °C</span>
+              <span><i class="dot st-caution"></i>37.5–38.0 °C</span>
+              <span><i class="dot st-danger"></i>Unsafe, 38.0 °C or more</span>
+              <span><i class="dot st-critical"></i>38.5 °C or more</span>
+            </div>
+          </div>
+
+          <!-- Live Occupant Telemetry & First-Person Feedback Cards -->
+          <div class="agent-cards" id="agent-cards"></div>
+        </div>
+
+        <!-- 168-hour core temperature for each modelled person -->
+        <div class="agent-chart-wrap">
+          <div class="agent-chart-head">
+            <span>Core Body Temperature (T<sub>core</sub> °C) across the 168h Heatwave</span>
+            <span class="hint">Click a person to highlight · solid line: 38.0 °C core limit</span>
+          </div>
+          <div class="chart" id="agent-chart"></div>
+        </div>
+      </section>
+
+      <!-- Ranked changes -->
+      <section class="panel">
+        <header class="panel-head">
+          <h3>What to change, ranked</h3>
+          <p class="hint">Hover a change to see its week. Apply it to make it the new design.</p>
+        </header>
+        <ol class="changes" id="changes"></ol>
+      </section>
+
+      <!-- Trail -->
+      <section class="panel" id="trail-panel" hidden>
+        <header class="panel-head">
+          <h3>Design trail</h3>
+          <button type="button" class="link" id="undo">Undo last</button>
+        </header>
+        <ol class="trail" id="trail"></ol>
+      </section>
+    </div>
+
+    <footer class="method">
+      Single-zone EnergyPlus 26.2 model, Chennai EPW. Safe hour = indoor heat index (NWS) below the limit,
+      with a <span id="fan-credit">2 °C</span> ceiling-fan credit on air temperature; no fan credit during the power cut.
+      Assumptions are placeholders pending calibration.
+    </footer>
+  </main>
+</div>
+
+<script src="app.js?v=6.1"></script>
+</body>
+</html>

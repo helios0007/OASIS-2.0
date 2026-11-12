@@ -1,0 +1,12 @@
+pandas
+numpy
+matplotlib
+eppy
+xgboost
+scikit-learn
+rhino3dm
+streamlit
+fastapi
+uvicorn
+python-multipart
+pythermalcomfort

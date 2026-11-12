@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OASIS 2.0 · Environmental & Thermal Simulation Workbench</title>
+  <meta name="claude:viewport-fit-sides" content="cover">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+  <style>
+:root, :root[data-theme="dark"] {
+  --bg-app: #060911; --bg-pane: #0b111e; --bg-card: #101829; --bg-card-2: #162238; --bg-card-3: #1e2d4a;
+  --bg-glass: rgba(11, 17, 30, 0.88);
+  --ink: #f8fafc; --ink-2: #cbd5e1; --muted: #64748b;
+  --line: rgba(148, 163, 184, 0.10); --border: rgba(148, 163, 184, 0.16); --border-hi: rgba(56, 189, 248, 0.45); --axis: #475569;
+  --accent: #06b6d4; --accent-2: #3b82f6; --accent-soft: rgba(6, 182, 212, 0.14); --accent-glow: rgba(6, 182, 212, 0.32);
+  --safe: #10b981; --safe-soft: rgba(16, 185, 129, 0.15);
+  --caution: #f59e0b; --caution-soft: rgba(245, 158, 11, 0.15);
+  --danger: #ef4444; --danger-soft: rgba(239, 68, 68, 0.15); --danger-wash: rgba(239, 68, 68, 0.08);
+  --extreme: #d946ef; --cut: #fbbf24; --cut-wash: rgba(251, 191, 36, 0.22);
+  --sel: #06b6d4; --alt: #10b981;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg-app: #e9e8e2; --bg-pane: #f4f3ee; --bg-card: #ffffff; --bg-card-2: #f8f7f3; --bg-card-3: #eae8e1;
+  --bg-glass: rgba(255, 255, 255, 0.90);
+  --ink: #0f172a; --ink-2: #334155; --muted: #64748b;
+  --line: rgba(15, 23, 42, 0.08); --border: rgba(15, 23, 42, 0.13); --border-hi: rgba(2, 132, 199, 0.45); --axis: #94a3b8;
+  --accent: #0284c7; --accent-2: #2563eb; --accent-soft: rgba(2, 132, 199, 0.11); --accent-glow: rgba(2, 132, 199, 0.22);
+  --safe: #059669; --safe-soft: rgba(5, 150, 105, 0.12);
+  --caution: #d97706; --caution-soft: rgba(217, 119, 6, 0.13);
+  --danger: #dc2626; --danger-soft: rgba(220, 38, 38, 0.12); --danger-wash: rgba(220, 38, 38, 0.06);
+  --extreme: #c026d3; --cut: #d97706; --cut-wash: rgba(245, 158, 11, 0.24);
+  --sel: #0284c7; --alt: #059669;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; padding: 0; height: 100%; background: var(--bg-app); color: var(--ink); font-family: var(--font-sans); font-size: 13px; line-height: 1.45; }
+h1, h2, h3, h4 { font-family: var(--font-display); margin: 0; font-weight: 600; }
+p { margin: 0; }
+code { font-family: var(--font-mono); font-size: 11px; background: var(--bg-card-3); padding: 1px 5px; border-radius: 4px; color: var(--accent); }
+.workbench { display: flex; flex-direction: column; height: 100vh; width: 100vw; overflow: hidden; }
+@media (max-width: 1180px) { .workbench { height: auto; min-height: 100vh; overflow: visible; } }
+.cmd-bar { height: 52px; flex-shrink: 0; background: var(--bg-pane); border-bottom: 1px solid var(--border); padding: 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cmd-brand { display: flex; align-items: center; gap: 10px; }
+.cmd-name { font-family: var(--font-display); font-size: 15.5px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.cmd-ver { font-family: var(--font-mono); font-size: 10px; background: var(--accent-soft); color: var(--accent); padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border-hi); }
+.cmd-sub { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+.cmd-presets { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.preset-chip, .cmd-btn { background: var(--bg-card); border: 1px solid var(--border); color: var(--ink-2); border-radius: 7px; padding: 5px 10px; font: inherit; font-size: 11.5px; font-weight: 500; cursor: pointer; }
+.preset-chip.active, .preset-chip:hover, .cmd-btn:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.cmd-right { display: flex; align-items: center; gap: 7px; }
+.engine-pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border-radius: 999px; background: var(--bg-card); border: 1px solid var(--border); font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); }
+.engine-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--safe); box-shadow: 0 0 8px var(--safe); }
+.wb-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 320px minmax(0, 1fr) 350px; background: var(--bg-app); }
+@media (max-width: 1180px) { .wb-body { grid-template-columns: 1fr; } }
+.pane-left { background: var(--bg-pane); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+.insp-section { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+.insp-head { display: flex; align-items: center; gap: 7px; }
+.insp-head h3 { font-size: 13px; flex: 1; }
+.insp-tag { font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 2px 6px; border-radius: 4px; }
+.field-lbl { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 4px; }
+.seg-grid { display: grid; gap: 5px; }
+.seg-grid.two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.seg-grid.three-col { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.seg-option { position: relative; cursor: pointer; }
+.seg-option input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.seg-card { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 7px; background: var(--bg-card); border: 1px solid var(--border); height: 100%; }
+.seg-option input:checked + .seg-card { background: var(--accent-soft); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.seg-icon { font-size: 11.5px; font-weight: 600; color: var(--ink); }
+.seg-option input:checked + .seg-card .seg-icon { color: var(--accent); }
+.choices-stack { display: flex; flex-direction: column; gap: 10px; }
+.choice-fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.choice-fieldset:disabled { opacity: 0.38; pointer-events: none; }
+.hint-banner { font-size: 10.5px; color: var(--caution); background: var(--caution-soft); padding: 4px 7px; border-radius: 5px; }
+.pane-center { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; overflow-y: auto; min-width: 0; }
+.telemetry-ribbon { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; flex-shrink: 0; }
+.kpi-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between; gap: 5px; position: relative; overflow: hidden; }
+.kpi-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2.5px; background: var(--kpi-color, var(--accent)); }
+.kpi-top { display: flex; justify-content: space-between; align-items: center; }
+.kpi-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: var(--ink-2); }
+.kpi-badge { font-family: var(--font-mono); font-size: 10px; font-weight: 600; padding: 1.5px 6px; border-radius: 999px; }
+.kpi-badge.good { background: var(--safe-soft); color: var(--safe); }
+.kpi-badge.warn { background: var(--caution-soft); color: var(--caution); }
+.kpi-badge.bad  { background: var(--danger-soft); color: var(--danger); }
+.kpi-main { display: flex; align-items: baseline; gap: 5px; }
+.kpi-val { font-family: var(--font-display); font-size: 26px; font-weight: 700; line-height: 1; }
+.kpi-unit { font-size: 11.5px; color: var(--muted); font-family: var(--font-mono); }
+.kpi-meter { height: 6px; background: var(--danger-soft); border-radius: 999px; overflow: hidden; display: flex; }
+.kpi-meter-fill { height: 100%; background: linear-gradient(90deg, var(--safe), var(--accent)); border-radius: 999px; }
+.night-pills { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.night-pill { height: 15px; border-radius: 3px; font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.night-pill.safe { background: var(--safe-soft); color: var(--safe); }
+.night-pill.danger { background: var(--danger-soft); color: var(--danger); }
+.kpi-sub { font-size: 10.5px; color: var(--muted); display: flex; justify-content: space-between; }
+.viewport-card, .analytics-dock { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.vp-Overlay-top { display: flex; justify-content: space-between; align-items: center; }
+.vp-cam-bar { display: flex; gap: 4px; }
+.cam-btn { background: var(--bg-card-2); border: 1px solid var(--border); color: var(--ink-2); border-radius: 6px; padding: 3px 9px; font: inherit; font-size: 11px; cursor: pointer; }
+.cam-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.vp-main-grid { display: grid; grid-template-columns: minmax(0, 1fr) 215px; gap: 10px; }
+.vp-canvas-wrap { background: radial-gradient(circle at 50% 45%, rgba(6, 182, 212, 0.09), transparent 72%), var(--bg-pane); border: 1px solid var(--border); border-radius: 10px; position: relative; display: flex; align-items: center; justify-content: center; min-height: 270px; cursor: grab; user-select: none; overflow: hidden; }
+#axon-svg { width: 100%; height: auto; max-height: 305px; display: block; }
+.vp-hud { background: var(--bg-pane); border: 1px solid var(--border); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; }
+.hud-hour { font-family: var(--font-mono); font-size: 17px; font-weight: 700; margin: 2px 0; }
+.hud-readouts { display: flex; flex-direction: column; gap: 4px; }
+.hud-row { display: flex; justify-content: space-between; font-size: 11px; padding: 4px 7px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--line); }
+.hud-row strong { font-family: var(--font-mono); }
+.hud-jumps { display: flex; gap: 4px; }
+.jump-pill { flex: 1; background: var(--bg-card); border: 1px solid var(--border); color: var(--ink-2); border-radius: 5px; padding: 4px; font-size: 10px; cursor: pointer; }
+.time-machine-bar { display: flex; align-items: center; gap: 10px; background: var(--bg-pane); border: 1px solid var(--border); border-radius: 9px; padding: 7px 11px; }
+.tm-play { width: 30px; height: 30px; border-radius: 7px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
+.tm-track-col { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 5px; background: var(--bg-card-3); border-radius: 999px; cursor: pointer; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+.tm-barcode { display: grid; grid-template-columns: repeat(168, 1fr); height: 5px; border-radius: 3px; overflow: hidden; }
+.tm-days { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.dock-tabs-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.view-tabs { display: flex; background: var(--bg-pane); border: 1px solid var(--border); border-radius: 8px; padding: 2px; gap: 2px; }
+.tab-btn { border: 0; background: transparent; color: var(--ink-2); font: inherit; font-size: 11.5px; padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+.tab-btn.active { background: var(--bg-card-2); color: var(--accent); font-weight: 600; }
+.legend { display: flex; gap: 12px; font-size: 11px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { display: inline-block; width: 15px; height: 0; border-top: 2.5px solid var(--alt); }
+.legend i.s { border-color: var(--sel); }
+.legend i.d { border-top: 2px dashed var(--danger); }
+.legend i.c { height: 10px; width: 8px; border: 0; background: var(--cut-wash); }
+#chart { position: relative; width: 100%; }
+#chart svg { display: block; width: 100%; height: auto; }
+#chart text { font-family: var(--font-mono); font-size: 10.5px; fill: var(--muted); }
+#tip { position: absolute; top: 8px; pointer-events: none; background: var(--bg-glass); border: 1px solid var(--border-hi); border-radius: 8px; padding: 8px 10px; font-size: 11.5px; min-width: 205px; z-index: 10; }
+.carpet-grid { display: grid; grid-template-columns: 62px repeat(24, minmax(19px, 1fr)); gap: 2.5px; align-items: center; }
+.carpet-hdr { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); text-align: center; }
+.carpet-day { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; color: var(--ink-2); }
+.carpet-cell { height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 9.5px; font-weight: 600; color: #fff; cursor: pointer; }
+.pane-right { background: var(--bg-pane); border-left: 1px solid var(--border); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.right-head { display: flex; justify-content: space-between; align-items: center; }
+.eyebrow-accent { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--accent); }
+.btn-optimize { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border: 0; border-radius: 7px; padding: 6px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.interv-scroll { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.interv-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 9px; padding: 10px 11px; display: flex; flex-direction: column; gap: 6px; }
+.interv-row-1 { display: flex; justify-content: space-between; align-items: center; }
+.interv-gain { font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--safe); }
+.interv-bar-track { height: 5px; background: var(--bg-card-3); border-radius: 999px; overflow: hidden; }
+.interv-bar-fill { height: 100%; background: linear-gradient(90deg, var(--safe), var(--accent)); }
+.btn-apply { background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent); border-radius: 6px; padding: 4px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.validation-mini { background: var(--bg-card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 11px; color: var(--muted); }
+  </style>
+</head>
+<body>
+<div class="workbench">
+  <header class="cmd-bar">
+    <div class="cmd-brand">
+      <div class="cmd-name">OASIS <span class="cmd-ver">2.0 WORKBENCH</span></div>
+      <div class="cmd-sub">Chennai · 10–16 May Heatwave · 20:00–21:00 Power Cut · <span id="nruns"></span> Stored EnergyPlus Runs</div>
+    </div>
+    <div class="cmd-presets">
+      <button type="button" class="preset-chip active" id="preset-base">Baseline Top-Floor</button>
+      <button type="button" class="preset-chip" id="preset-cool">+ Cool White Roof</button>
+      <button type="button" class="preset-chip" id="preset-best">✨ Best Combination</button>
+    </div>
+    <div class="cmd-right">
+      <button type="button" class="cmd-btn" id="reset">↺ Reset</button>
+      <button type="button" class="cmd-btn" id="theme-toggle"><span id="theme-icon">☀</span> <span id="theme-label">Light</span></button>
+    </div>
+  </header>
+
+  <div class="wb-body">
+    <aside class="pane-left">
+      <div class="insp-section">
+        <div class="insp-head"><span class="insp-tag">01</span><h3>Building &amp; Envelope Parameters</h3></div>
+        <form id="inputs" class="choices-stack" autocomplete="off"></form>
+      </div>
+      <div class="insp-section">
+        <div class="insp-head"><span class="insp-tag">CAD</span><h3>Live Rhino .3dm Server</h3></div>
+        <p style="font-size:11.5px;color:var(--ink-2)">For custom room dimensions or Rhino <code>.3dm</code> geometry uploads, open the live server at <code>http://127.0.0.1:8000</code>.</p>
+      </div>
+    </aside>
+
+    <main class="pane-center">
+      <section class="telemetry-ribbon" id="figs" aria-live="polite"></section>
+
+      <section class="viewport-card">
+        <div class="vp-Overlay-top">
+          <div style="font-size:12px"><b>3D Spatial &amp; Solar Twin</b> <span style="color:var(--muted);font-size:11px">(Drag to orbit 3D view)</span></div>
+          <div class="vp-cam-bar">
+            <button type="button" class="cam-btn active" data-cam="iso">Iso 3D</button>
+            <button type="button" class="cam-btn" data-cam="south">South Elev</button>
+            <button type="button" class="cam-btn" data-cam="top">Plan View</button>
+          </div>
+        </div>
+        <div class="vp-main-grid">
+          <div class="vp-canvas-wrap" id="axon-stage">
+            <svg id="axon-svg" viewBox="0 0 720 350"></svg>
+          </div>
+          <div class="vp-hud">
+            <div>
+              <div style="font-size:10.5px;color:var(--muted)" id="hud-day">10 May · Day 1</div>
+              <div class="hud-hour" id="hud-time">14:00 – 15:00</div>
+              <div id="hud-band" style="font-size:10px;font-weight:700">DANGER</div>
+            </div>
+            <div class="hud-readouts">
+              <div class="hud-row"><span>Felt Heat Index</span><strong id="hud-hi">-- °C</strong></div>
+              <div class="hud-row"><span>Outdoor Air</span><strong id="hud-tout">-- °C</strong></div>
+              <div class="hud-row"><span>Peak Indoor Air</span><strong id="hud-tin">-- °C</strong></div>
+              <div class="hud-row"><span>Ceiling Fan</span><strong id="hud-fan">-2.0 °C</strong></div>
+            </div>
+            <div class="hud-jumps">
+              <button type="button" class="jump-pill" id="jump-peak">🔥 Peak</button>
+              <button type="button" class="jump-pill" id="jump-cut">⚡ 20:00 Cut</button>
+              <button type="button" class="jump-pill" id="jump-cool">🌅 06:00</button>
+            </div>
+          </div>
+        </div>
+        <div class="time-machine-bar">
+          <button type="button" class="tm-play" id="play-btn"><span id="play-icon">▶</span></button>
+          <div class="tm-track-col">
+            <input type="range" id="hour-scrubber" min="0" max="167" value="14">
+            <div class="tm-barcode" id="tm-barcode"></div>
+            <div class="tm-days"><span>10 May</span><span>11 May</span><span>12 May</span><span>13 May</span><span>14 May</span><span>15 May</span><span>16 May</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="analytics-dock">
+        <div class="dock-tabs-bar">
+          <div class="view-tabs">
+            <button type="button" class="tab-btn active" data-view="timeline">📈 168h Timeline</button>
+            <button type="button" class="tab-btn" data-view="heatmap">🟧 7×24h Thermal Barcode</button>
+          </div>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div id="view-timeline"><div id="chart"><div id="tip" hidden></div></div></div>
+        <div id="view-heatmap" hidden><div id="heatmap-container"></div></div>
+      </section>
+    </main>
+
+    <aside class="pane-right">
+      <div class="right-head">
+        <div><span class="eyebrow-accent">Decision-Support Ranking</span><h2>Passive Strategies</h2></div>
+        <button type="button" class="btn-optimize" id="apply-best-top">✨ Apply Best</button>
+      </div>
+      <div class="interv-scroll" id="changes"></div>
+      <div class="validation-mini">
+        <div id="sweeptxt"></div>
+        <div id="surtxt"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+const D = __DATA__;
+const LIMIT = 41, HOURS = 168, FIRST_DAY = 10;
+const ROOF_ONLY = ["roof", "roof_solar_absorptance"];
+const SITE = ["floor", "occupants"];
+const UI = {
+  floor: { label: "Floor level", opts: { top: "Top floor", middle: "Middle floor" } },
+  occupants: { label: "People living there", opts: { 2: "2 people", 4: "4 people", 6: "6 people" } },
+  orientation_deg: { label: "Windows face", opts: { 0: "North & South", 90: "East & West" } },
+  wall: { label: "Walls", opts: { brick_230: "230 mm brick", brick_115: "115 mm brick", aac_200: "200 mm AAC" } },
+  roof: { label: "Roof build-up", opts: { rcc_150: "Bare concrete", rcc_150_insul_50: "Slab + 50mm EPS" } },
+  roof_solar_absorptance: { label: "Roof colour", opts: { 0.7: "Grey (0.7)", 0.4: "Light (0.4)", 0.2: "White (0.2)" } },
+  wwr: { label: "Window WWR", opts: { 0.1: "10 %", 0.15: "15 %", 0.25: "25 %" } },
+  shading_depth_m: { label: "Window overhang", opts: { 0: "None", 0.6: "0.6 m chajja" } },
+  night_vent: { label: "Windows at night", opts: { false: "Shut 22–06h", true: "Open 24h" } },
+};
+const ORDER = ["floor", "occupants", "orientation_deg", "wall", "roof", "roof_solar_absorptance", "wwr", "shading_depth_m", "night_vent"];
+const KEYS = Object.keys(D.levels);
+const optLabel = (k, i) => UI[k].opts[String(D.levels[k][i])];
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+const DEFAULT = Object.fromEntries(KEYS.map(k => [k, D.levels[k].indexOf(D.baseline[k])]));
+let state = { ...DEFAULT };
+let currentHour = 14, playTimer = null, activeView = "timeline";
+let camYaw = 38, camPitch = 26, isDragging = false, dragStart = { x: 0, y: 0, yaw: 38, pitch: 26 };
+
+function hiColor(hi) {
+  if (hi < 32) return "#10b981";
+  if (hi < 37) return "#06b6d4";
+  if (hi < 41) return "#f59e0b";
+  if (hi < 45) return "#ef4444";
+  return "#d946ef";
+}
+const isMiddle = s => D.levels.floor[s.floor] === "middle";
+const keyOf = s => KEYS.map(k => (isMiddle(s) && ROOF_ONLY.includes(k)) ? 0 : s[k]).join("");
+const run = s => { const r = D.runs[keyOf(s)]; return { safe: r[0], cut: r[1], peak: r[2], deg: r[3], mean: r[4], max: r[5] }; };
+const hiCache = {};
+function hiOf(s) {
+  const key = keyOf(s);
+  if (!hiCache[key]) {
+    const b = atob(D.hi[key]);
+    const a = new Array(HOURS);
+    for (let i = 0; i < HOURS; i++) a[i] = (b.charCodeAt(2 * i) | (b.charCodeAt(2 * i + 1) << 8)) / 10;
+    hiCache[key] = a;
+  }
+  return hiCache[key];
+}
+const designKeys = s => KEYS.filter(k => !SITE.includes(k) && !(isMiddle(s) && ROOF_ONLY.includes(k)));
+function singleChanges(s) {
+  const cur = run(s), out = [];
+  designKeys(s).forEach(k => D.levels[k].forEach((_, i) => {
+    if (i === s[k]) return;
+    const r = run({ ...s, [k]: i });
+    out.push({ k, i, r, gain: r.safe - cur.safe, dDeg: r.deg - cur.deg, dPeak: r.peak - cur.peak });
+  }));
+  return out.sort((a, b) => b.gain - a.gain || a.dDeg - b.dDeg);
+}
+function bestCombo(s) {
+  const ks = designKeys(s); let best = null;
+  (function walk(n, cand) {
+    if (n === ks.length) {
+      const r = run(cand);
+      if (!best || r.safe > best.r.safe || (r.safe === best.r.safe && r.deg < best.r.deg)) best = { s: { ...cand }, r };
+      return;
+    }
+    D.levels[ks[n]].forEach((_, i) => walk(n + 1, { ...cand, [ks[n]]: i }));
+  })(0, { ...s });
+  return best;
+}
+
+function buildInputs() {
+  $("inputs").innerHTML = ORDER.map(k => {
+    const cols = D.levels[k].length === 3 ? "three-col" : "two-col";
+    return `<fieldset id="fs-${k}" class="choice-fieldset"><span class="field-lbl">${esc(UI[k].label)}</span><div class="seg-grid ${cols}">` +
+      D.levels[k].map((_, i) => `<label class="seg-option"><input type="radio" name="${k}" id="in-${k}-${i}" value="${i}"><span class="seg-card"><span class="seg-icon">${esc(optLabel(k, i))}</span></span></label>`).join("") +
+      `</div>${ROOF_ONLY.includes(k) ? `<span class="hint-banner" id="hint-${k}" hidden>Middle floor: adiabatic ceiling.</span>` : ""}</fieldset>`;
+  }).join("");
+  $("inputs").addEventListener("change", e => { if (e.target.name in state) { state[e.target.name] = +e.target.value; update(); } });
+}
+function syncInputs() {
+  KEYS.forEach(k => { $(`in-${k}-${state[k]}`).checked = true; });
+  ROOF_ONLY.forEach(k => { $(`fs-${k}`).disabled = isMiddle(state); $(`hint-${k}`).hidden = !isMiddle(state); });
+}
+
+let shown = [];
+function update() {
+  syncInputs();
+  const r = run(state), changes = singleChanges(state), hiArr = hiOf(state);
+  const pctSafe = Math.round(r.safe / HOURS * 100);
+  let nightPills = `<div class="night-pills">`;
+  for (let d = 0; d < 7; d++) {
+    const hIdx = d * 24 + 20;
+    nightPills += `<div class="night-pill ${hiArr[hIdx] >= LIMIT ? "danger" : "safe"}" data-jump="${hIdx}">${FIRST_DAY + d}</div>`;
+  }
+  nightPills += `</div>`;
+
+  $("figs").innerHTML = `
+    <div class="kpi-card" style="--kpi-color:var(--safe)">
+      <div class="kpi-top"><span class="kpi-label">Safe Hours</span><span class="kpi-badge good">${pctSafe}%</span></div>
+      <div class="kpi-main"><span class="kpi-val">${r.safe}</span><span class="kpi-unit">/ ${HOURS} h</span></div>
+      <div class="kpi-meter"><div class="kpi-meter-fill" style="width:${pctSafe}%"></div></div>
+      <div class="kpi-sub"><span>${HOURS - r.safe}h danger</span></div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:var(--cut)">
+      <div class="kpi-top"><span class="kpi-label">Power-Cut Danger</span><span class="kpi-badge warn">${7 - r.cut}/7 safe</span></div>
+      <div class="kpi-main"><span class="kpi-val">${r.cut}</span><span class="kpi-unit">/ 7 cuts</span></div>
+      ${nightPills}
+      <div class="kpi-sub"><span>20:00–21:00 cut</span></div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:var(--danger)">
+      <div class="kpi-top"><span class="kpi-label">Peak Heat Index</span><span class="kpi-badge bad">Max</span></div>
+      <div class="kpi-main"><span class="kpi-val">${r.peak.toFixed(1)}</span><span class="kpi-unit">°C</span></div>
+      <div class="kpi-sub"><span>Air peak: ${r.max.toFixed(1)}°C</span></div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:var(--extreme)">
+      <div class="kpi-top"><span class="kpi-label">Overheating</span><span class="kpi-badge warn">Severity</span></div>
+      <div class="kpi-main"><span class="kpi-val">${r.deg.toFixed(0)}</span><span class="kpi-unit">°C·h</span></div>
+      <div class="kpi-sub"><span>Above 41 °C</span></div>
+    </div>`;
+
+  $("tm-barcode").innerHTML = hiArr.map(v => `<span style="background:${hiColor(v)}"></span>`).join("");
+
+  const seen = new Set(), perParam = changes.filter(c => !seen.has(c.k) && seen.add(c.k));
+  const top = perParam.filter(c => c.gain > 0).slice(0, 5);
+  const best = bestCombo(state);
+  $("apply-best-top").onclick = () => { state = { ...best.s }; update(); };
+
+  $("changes").innerHTML = top.length ? top.map((c, n) => `
+    <div class="interv-card">
+      <div class="interv-row-1"><b>#${n + 1} ${esc(UI[c.k].label)}: ${esc(optLabel(c.k, c.i))}</b><span class="interv-gain">+${c.gain}h</span></div>
+      <div style="font-size:11px;color:var(--muted)">Reaches ${c.r.safe}/168h · Peak ${c.dPeak > 0 ? "+" : "−"}${Math.abs(c.dPeak).toFixed(1)}°C</div>
+      <div class="interv-bar-track"><div class="interv-bar-fill" style="width:${Math.min(100, c.gain * 1.5)}%"></div></div>
+      <button type="button" class="btn-apply" data-k="${c.k}" data-i="${c.i}">Apply Change</button>
+    </div>`).join("") : `<div class="interv-card"><b style="color:var(--safe)">✨ Optimal Combination Active (${r.safe}h)</b></div>`;
+
+  shown = [];
+  if (top.length) shown.push({ id: "alt", arr: hiOf({ ...state, [top[0].k]: top[0].i }), color: "--alt", name: `+ ${optLabel(top[0].k, top[0].i)}`, short: "Top change" });
+  shown.push({ id: "you", arr: hiArr, color: "--sel", name: "Your design", short: "Your design" });
+  $("legend").innerHTML = `<span><i class="s"></i>Your design</span>` + (top.length ? `<span><i></i>${esc(shown[0].name)}</span>` : "") + `<span><i class="d"></i>41°C Limit</span>`;
+
+  updateAxonAndHud();
+  if (activeView === "timeline") drawChart(); else drawHeatmap();
+}
+
+function updateAxonAndHud() {
+  const hiArr = hiOf(state), r = run(state);
+  const h = currentHour % 24, dayIdx = Math.floor(currentHour / 24);
+  const pad = n => String(n).padStart(2, "0");
+  const hi = hiArr[currentHour], tout = D.t_out[currentHour], isCut = h === 20;
+  $("hud-day").textContent = `${FIRST_DAY + dayIdx} May · Day ${dayIdx + 1}`;
+  $("hud-time").textContent = `${pad(h)}:00 – ${pad(h + 1)}:00`;
+  $("hud-band").textContent = isCut ? "⚡ POWER CUT · FAN OFF" : (hi >= 41 ? "DANGER (≥ 41°C)" : "SAFE (< 41°C)");
+  $("hud-band").style.color = isCut ? "#fbbf24" : hiColor(hi);
+  $("hud-hi").textContent = `${hi.toFixed(1)} °C`;
+  $("hud-hi").style.color = hiColor(hi);
+  $("hud-tout").textContent = `${tout.toFixed(1)} °C`;
+  $("hud-tin").textContent = `${r.max.toFixed(1)} °C peak`;
+  $("hud-fan").textContent = isCut ? "OFF (Cut)" : "ON (−2.0°C)";
+
+  const cx = 360, cy = 225, lx = 150, wy = 125, hz = 85;
+  const yawRad = camYaw * Math.PI / 180, pitchRad = camPitch * Math.PI / 180;
+  const cosY = Math.cos(yawRad), sinY = Math.sin(yawRad), cosP = Math.cos(pitchRad), sinP = Math.sin(pitchRad);
+  const proj = (x, y, z) => [cx + (x * cosY - y * sinY), cy + (x * sinY + y * cosY) * sinP - z * cosP];
+  const pts = arr => arr.map(([x, y, z]) => proj(x, y, z).map(v => v.toFixed(1)).join(",")).join(" ");
+  const x0 = -lx/2, x1 = lx/2, y0 = -wy/2, y1 = wy/2, z0 = 0, z1 = hz, zr0 = z1 + 36, zr1 = zr0 + 9;
+  const glow = hiColor(hi);
+  const roofAbs = D.levels.roof_solar_absorptance[state.roof_solar_absorptance];
+  const roofTopCol = roofAbs <= 0.2 ? "#f8fafc" : roofAbs <= 0.4 ? "#a8a29e" : "#57534e";
+
+  let s = `<polygon points="${pts([[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],[x0,y0,z1]])}" fill="#92400e" fill-opacity="0.75" stroke="#f59e0b"/>`;
+  s += `<polygon points="${pts([[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]])}" fill="#b45309" fill-opacity="0.80" stroke="#f59e0b"/>`;
+  s += `<polygon points="${pts([[x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0]])}" fill="${glow}" fill-opacity="0.45" stroke="${glow}" stroke-width="2"/>`;
+  s += `<polygon points="${pts([[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]])}" fill="#b45309" fill-opacity="0.24" stroke="#f59e0b"/>`;
+  s += `<polygon points="${pts([[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],[x1,y0,z1]])}" fill="#92400e" fill-opacity="0.20" stroke="#f59e0b"/>`;
+  if (!isMiddle(state)) {
+    s += `<polygon points="${pts([[x0,y0,zr1],[x1,y0,zr1],[x1,y1,zr1],[x0,y1,zr1]])}" fill="${roofTopCol}" stroke="#94a3b8"/>`;
+  }
+  $("axon-svg").innerHTML = s;
+}
+
+let geo = null;
+function drawChart() {
+  const el = $("chart"), W = Math.max(280, el.clientWidth), H = 220;
+  const m = { t: 12, r: 80, b: 24, l: 34 }, pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const y0 = Math.floor(D.ymin / 5) * 5, y1 = Math.ceil(D.ymax / 5) * 5;
+  const x = h => m.l + h / HOURS * pw, y = v => m.t + (y1 - v) / (y1 - y0) * ph;
+  geo = { m, pw, x, y, W };
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`;
+  s += `<rect x="${m.l}" y="${m.t}" width="${pw}" height="${y(LIMIT) - m.t}" fill="var(--danger-wash)"/>`;
+  for (let v = y0; v <= y1; v += 5) {
+    s += `<line x1="${m.l}" x2="${m.l + pw}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/>`;
+    s += `<text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+  }
+  for (let d = 0; d < 7; d++) {
+    const cx = x(d * 24 + 20), cw = Math.max(2, x(d * 24 + 21) - cx);
+    s += `<rect x="${cx}" y="${m.t}" width="${cw}" height="${ph}" fill="var(--cut-wash)"/>`;
+    s += `<text x="${x(d * 24 + 12)}" y="${H - 6}" text-anchor="middle">${FIRST_DAY + d} May</text>`;
+  }
+  s += `<line x1="${m.l}" x2="${m.l + pw}" y1="${y(LIMIT)}" y2="${y(LIMIT)}" stroke="var(--danger)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+  const path = a => a.map((v, i) => `${i ? "L" : "M"}${x(i + .5).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  shown.forEach(d => { s += `<path d="${path(d.arr)}" fill="none" stroke="var(${d.color})" stroke-width="2.2"/>`; });
+  s += `</svg>`;
+  el.querySelector("svg")?.remove();
+  el.insertAdjacentHTML("afterbegin", s);
+}
+
+function drawHeatmap() {
+  const hiArr = hiOf(state);
+  let html = `<div class="carpet-grid"><div class="carpet-hdr">Day\\Hr</div>`;
+  for (let h = 0; h < 24; h++) html += `<div class="carpet-hdr">${String(h).padStart(2, "0")}</div>`;
+  for (let d = 0; d < 7; d++) {
+    html += `<div class="carpet-day">${FIRST_DAY + d} May</div>`;
+    for (let h = 0; h < 24; h++) {
+      const v = hiArr[d * 24 + h];
+      html += `<div class="carpet-cell" style="background:${hiColor(v)}">${v.toFixed(0)}</div>`;
+    }
+  }
+  html += `</div>`;
+  $("heatmap-container").innerHTML = html;
+}
+
+const stage = $("axon-stage");
+stage.addEventListener("pointerdown", e => { isDragging = true; dragStart = { x: e.clientX, y: e.clientY, yaw: camYaw, pitch: camPitch }; stage.setPointerCapture(e.pointerId); });
+stage.addEventListener("pointermove", e => { if (!isDragging) return; camYaw = (dragStart.yaw + (e.clientX - dragStart.x) * 0.45) % 360; camPitch = Math.max(5, Math.min(82, dragStart.pitch + (e.clientY - dragStart.y) * 0.35)); updateAxonAndHud(); });
+stage.addEventListener("pointerup", () => { isDragging = false; });
+document.querySelectorAll("[data-cam]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-cam]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    if (btn.dataset.cam === "iso") { camYaw = 38; camPitch = 26; }
+    else if (btn.dataset.cam === "south") { camYaw = 0; camPitch = 8; }
+    else if (btn.dataset.cam === "top") { camYaw = 0; camPitch = 78; }
+    updateAxonAndHud();
+  });
+});
+
+$("changes").addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (b) { state[b.dataset.k] = +b.dataset.i; update(); } });
+$("reset").addEventListener("click", () => { state = { ...DEFAULT }; update(); });
+$("preset-base").addEventListener("click", () => { state = { ...DEFAULT }; update(); });
+$("preset-cool").addEventListener("click", () => { state = { ...DEFAULT, roof_solar_absorptance: 2 }; update(); });
+$("preset-best").addEventListener("click", () => { state = { ...bestCombo(state).s }; update(); });
+$("theme-toggle").addEventListener("click", () => {
+  const html = document.documentElement;
+  const next = html.getAttribute("data-theme") === "light" ? "dark" : "light";
+  html.setAttribute("data-theme", next);
+});
+$("hour-scrubber").addEventListener("input", e => { currentHour = +e.target.value; updateAxonAndHud(); });
+$("play-btn").addEventListener("click", () => {
+  if (playTimer) { clearInterval(playTimer); playTimer = null; $("play-icon").textContent = "▶"; }
+  else { $("play-icon").textContent = "⏸"; playTimer = setInterval(() => { currentHour = (currentHour + 1) % HOURS; $("hour-scrubber").value = currentHour; updateAxonAndHud(); }, 110); }
+});
+$("jump-peak").addEventListener("click", () => {
+  const arr = hiOf(state); let m = 0; arr.forEach((v, i) => { if (v > arr[m]) m = i; });
+  currentHour = m; $("hour-scrubber").value = m; updateAxonAndHud();
+});
+$("jump-cut").addEventListener("click", () => { currentHour = Math.floor(currentHour / 24) * 24 + 20; $("hour-scrubber").value = currentHour; updateAxonAndHud(); });
+$("jump-cool").addEventListener("click", () => { currentHour = Math.floor(currentHour / 24) * 24 + 6; $("hour-scrubber").value = currentHour; updateAxonAndHud(); });
+document.querySelectorAll("[data-view]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-view]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    activeView = btn.dataset.view;
+    $("view-timeline").hidden = activeView !== "timeline";
+    $("view-heatmap").hidden = activeView !== "heatmap";
+    if (activeView === "timeline") drawChart(); else drawHeatmap();
+  });
+});
+
+$("nruns").textContent = D.n.toLocaleString("en-GB");
+$("sweeptxt").textContent = `${D.n.toLocaleString("en-GB")} EnergyPlus 26.2 runs embedded.`;
+$("surtxt").textContent = `XGBoost R² = ${D.surrogate.r2} (MAE ${D.surrogate.mae_hours.toFixed(1)}h).`;
+buildInputs();
+update();
+</script>
+</body>
+</html>
