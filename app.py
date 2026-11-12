@@ -95,7 +95,7 @@ def build_3d_svg(p, hi_val, tout_val, hour_of_day):
     else:
         svg += f'<polygon points="{pts([(x0,y0,zr0),(x1,y0,zr0),(x1,y1,zr0),(x0,y1,zr0)])}" fill="#475569" fill-opacity="0.72" stroke="#94a3b8"/>'
     rx, ry = iso(0, 0, z1 * 0.36)
-    fan_txt = "⚡ FAN OFF (POWER CUT)" if is_cut else "🌀 FAN ON (-2.0°C)"
+    fan_txt = "⚡ FAN OFF (POWER CUT)" if is_cut else "🌀 FAN ON (≈ −2 °C, ASHRAE 55)"
     svg += f'<g transform="translate({rx:.1f},{ry:.1f})"><rect x="-62" y="-13" width="124" height="24" rx="12" fill="rgba(11,17,30,0.88)" stroke="{glow}" stroke-width="1.5"/><text x="0" y="3" text-anchor="middle" fill="{glow}" font-size="11" font-family="monospace" font-weight="700">HI {hi_val:.1f}°C · Out {tout_val:.1f}°C</text></g>'
     svg += f'<text x="16" y="24" fill="#cbd5e1" font-size="11.5" font-family="monospace" font-weight="700">{L:.1f}m × {W:.1f}m × {H:.1f}m · {fan_txt}</text>'
     svg += "</svg>"
@@ -128,7 +128,7 @@ def main():
         <h2 style="margin:0;font-size:20px;color:#f8fafc">Chennai Heatwave (10–16 May) · Nightly 20:00–21:00 Power Cut</h2>
       </div>
       <div style="font-size:12px;color:#cbd5e1">
-        Safe Limit: <b>&lt; {SAFE_LIMIT_C:.0f} °C HI</b> · Ceiling Fan Credit: <b>−{FAN_CREDIT_C:.1f} °C</b> · Full Web Studio also live at <a href="http://127.0.0.1:8000" target="_blank" style="color:#06b6d4;font-weight:700">http://127.0.0.1:8000</a>
+        Safe Limit: <b>&lt; {SAFE_LIMIT_C:.0f} °C HI</b> · Ceiling Fan: <b>ASHRAE 55 cooling effect (about {FAN_CREDIT_C:.0f} °C)</b> · Full Web Studio also live at <a href="http://127.0.0.1:8000" target="_blank" style="color:#06b6d4;font-weight:700">http://127.0.0.1:8000</a>
       </div>
     </div>
     """, unsafe_allow_html=True)

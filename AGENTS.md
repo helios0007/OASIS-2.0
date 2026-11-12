@@ -45,6 +45,7 @@ Run all commands from the project root (`D:\IAAC\OASIS 2.0`) using the `.venv` P
 | Build standalone HTML tool | `python make_tool.py` | `outputs/oasis_tool.html` |
 | Assess a Rhino `.3dm` model in CLI | `python run_rhino.py data/rhino/sample_flat.3dm` | Prints safe hours and ranked interventions |
 | Run model calibration (Dhaka homes) | `python calibrate.py` | `outputs/calibration/summary.json`, `grid_results.csv`, `hourly.csv` |
+| Calibration round 4 (adopted) / Delhi check | `python calibrate_homes.py --airflow afn` / `... --validate Delhi` | `outputs/calibration/homes/afn/summary.json`, `afn_validate_delhi/` |
 | Plot calibration charts | `python plot_calibration.py` | `outputs/calibration/calibration_daily_cycle.png`, `calibration_timeseries.png` |
 | Start Streamlit app | `streamlit run app.py` | Local browser app (`http://localhost:8501`) |
 | Start FastAPI + Web UI server | `python run_server.py` | `http://127.0.0.1:8000` |
@@ -53,7 +54,7 @@ Run all commands from the project root (`D:\IAAC\OASIS 2.0`) using the `.venv` P
 There is no `pytest` suite yet; verification uses dedicated check scripts and API probes:
 1. **EnergyPlus smoke test**: `python test_run.py` — runs `1ZoneUncontrolled.idf` against `data/weather/chennai.epw`, checks that `outputs/test_run/eplusout.csv` is created and `eplusout.err` has no `** Severe **` lines.
 2. **Baseline model sanity check**: `python check_baseline.py` — builds and simulates `BASELINE` (`outputs/baseline.idf`), prints summary stats (`min`, `mean`, `max` indoor temperature/humidity and peak hour), and outputs the final status line of `eplusout.err`.
-3. **Rhino parser & live assessment check**: `python make_sample_rhino.py` followed by `python run_rhino.py data/rhino/sample_flat.3dm` (expected: 94 safe hours as drawn, white roof coating +53).
+3. **Rhino parser & live assessment check**: `python make_sample_rhino.py` followed by `python run_rhino.py data/rhino/sample_flat.3dm` (expected after calibration round 4: 115 safe hours as drawn, white roof coating +28).
 4. **Web server check**: Run `python run_server.py` and verify `GET http://127.0.0.1:8000/api/health` returns `{"status": "ok"}`.
 
 ---
@@ -72,7 +73,7 @@ There is no `pytest` suite yet; verification uses dedicated check scripts and AP
   - Surface vertices follow `UpperLeftCorner`, `Counterclockwise` (viewed from outside), `Relative` coordinates. At `orientation_deg = 0`, `length_m` runs east–west (north/south walls) and `width_m` runs north–south (east/west walls).
   - Construction material layers in `oasis/build_idf.py` are always listed **from outside to inside**.
 - **Visible assumptions & parameters**:
-  - Keep scientific/modelling placeholders as explicit module constants (`FAN_CREDIT_C = 2.0` and `SAFE_LIMIT_C = 41.0` in `oasis/metrics.py`; `DEFAULTS` in `oasis/build_idf.py`).
+  - Keep modelling constants explicit (`SAFE_LIMIT_C = 41.0` and the ASHRAE 55 fan settings in `oasis/metrics.py`; calibrated `DEFAULTS` in `oasis/build_idf.py`, from `calibrate_homes.py --airflow afn`).
   - Use `setting(p, key)` in `oasis/build_idf.py` for calibration-tunable parameters (`airflow_factor`, `infiltration_ach`, `appliances_peak_w`, `internal_mass_m2`, `windows_open_hour`, `windows_close_hour`) so calibration scripts can test overrides via parameter dicts without silently mutating baseline defaults.
 - **Code style & file hygiene**:
   - Write straightforward, well-commented Python with short functions and minimal dependencies.

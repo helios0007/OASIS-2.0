@@ -77,7 +77,7 @@ def group_params(rows, wall):
     """The OASIS flat, set up like the group's homes."""
     people = pd.to_numeric(rows["Total number of household members"], errors="coerce")
     night = pd.to_numeric(rows["Flowing ventilation night"], errors="coerce")
-    return dict(BASELINE,
+    return dict(BASELINE, airflow_model="simple",   # round 2 used the simple airflow model
                 wall=wall,
                 occupants=int(round(people.median())) if people.notna().any() else 4,
                 night_vent=bool(night.median() >= 0.5) if night.notna().any() else False,

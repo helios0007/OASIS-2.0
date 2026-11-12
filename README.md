@@ -8,9 +8,9 @@ Indian cities, starting with **Chennai**. It answers two questions:
 
 Master's thesis project: Master in AI for Architecture and the Built Environment, IAAC Barcelona, 2026/27.
 
-> Status (12 Nov 2026): working prototype. Material properties, the fan credit and the safe limit
-> are still placeholders until calibration is finished, so treat results as relative (which change is
-> better), not absolute.
+> Status (12 Nov 2026): working prototype, calibrated on 12 measured Dhaka homes (hourly error about
+> 1.1 °C) and checked on Delhi. No Chennai homes yet; the 41 °C limit is a chosen threshold and some
+> inputs (household, routine, glass, materials) are assumptions. See `docs/OASIS_tool_overview.md`.
 
 ---
 
@@ -22,10 +22,10 @@ Master's thesis project: Master in AI for Architecture and the Built Environment
 | Period | 10–16 May, the hottest week: 7 days × 24 h = **168 hours** |
 | Power cut | Every night **20:00–21:00**: ceiling fans off |
 | Safe hour | Indoor **heat index < 41 °C** (US NWS formula on indoor air temperature + humidity) |
-| Fan credit | When fans run, air temperature is lowered by **2 °C** before the heat index is computed; no credit during the cut |
+| Fan credit | When fans run, air temperature is lowered by the **ASHRAE 55 cooling effect** (about 2 °C, every hour) before the heat index is computed; no credit during the cut |
 | Building | One free-running room/flat (no AC), modelled as a single EnergyPlus zone |
 
-The limit and fan credit live in `oasis/metrics.py` (`SAFE_LIMIT_C`, `FAN_CREDIT_C`).
+The limit and fan settings live in `oasis/metrics.py` (`SAFE_LIMIT_C`, `fan_credit_c`).
 Scenario dates and cut hours live in `config.py`.
 
 ---
@@ -155,7 +155,8 @@ The previous "workbench" UI (3D twin, psychrometric chart, matrix modal) is kept
 | Baseline + 3 MVP interventions | `python run_mvp.py` | `outputs/results.csv`, `hourly.csv`, `heat_index_week.png` |
 | Full parameter sweep (1,512 runs) | `python run_sweep.py` | `outputs/sweep.csv`, `sweep_hourly.csv` |
 | XGBoost surrogate | `python train_surrogate.py` | `outputs/surrogate.json`, `surrogate_metrics.json` |
-| Calibration vs Dhaka loggers | `python calibrate.py` then `python plot_calibration.py` | `outputs/calibration/` |
+| Calibration vs Dhaka loggers (round 4, adopted) | `python calibrate_homes.py --airflow afn` | `outputs/calibration/homes/afn/` |
+| Check on Delhi, no refit | `python calibrate_homes.py --airflow afn --validate Delhi` | `outputs/calibration/homes/afn_validate_delhi/` |
 
 Checks: `python test_run.py` (EnergyPlus smoke test) and `python check_baseline.py` (baseline sanity stats).
 
@@ -182,8 +183,8 @@ docs/                OASIS_tool_overview.md
 ## Known limitations
 
 - Single-zone model: no inter-room airflow and no neighbouring flats other than "middle floor" (adiabatic ceiling).
-- `FAN_CREDIT_C` and `SAFE_LIMIT_C` are placeholders (to be replaced with the ASHRAE 55 fan effect and published thresholds).
-- Calibration is still in progress: parameters sit at grid edges, and the simulated daily peak (~14:00) comes earlier than measured (16:00–17:00).
+- `SAFE_LIMIT_C` (41 °C) is a chosen threshold, not fitted; health-based thresholds are not adopted yet.
+- Calibrated on Dhaka, not Chennai. Appliance heat and wall leakage are only weakly fixed by the data, and the simulated daily peak (~14:00) still comes earlier than measured (17:00).
 - The body check covers adults only; no validated child thermoregulation model is used.
 - No intervention costs yet: changes are ranked by hours, not hours per rupee.
 - The server has no login. It listens on 127.0.0.1 only.

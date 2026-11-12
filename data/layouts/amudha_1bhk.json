@@ -1,0 +1,38 @@
+{
+  "name": "Amudha Elite 1BHK (636 sq ft)",
+  "source": "Developer marketing plan, 1630055833_amudha-elite-1bhk-1t-636-sq-ft-22393731.jpeg. Room sizes from the labels; positions from the drawing (not to scale), snapped so shared walls meet.",
+  "units": "ft",
+  "coordinates": "x to the right, y down from the top edge of the plan. The plan's top is taken as north (orientation_deg rotates it).",
+  "assumed": {
+    "north": "top of the plan",
+    "height_m": "3.0 (not on the plan)",
+    "window sizes": "widths from the drawing; heights by kind (see build_layout.OPENING_KINDS)",
+    "outside walls": "every wall with no room on the other side faces outdoors (party walls not shown on the plan)",
+    "internal doors": "open"
+  },
+  "height_m": 3.0,
+  "rooms": {
+    "bedroom": {"type": "bedroom", "fan": true,  "rects": [[2.58, 0.0, 11.58, 12.08]]},
+    "living":  {"type": "living",  "fan": true,  "rects": [[11.58, 0.0, 24.08, 16.0], [7.08, 12.08, 11.58, 17.58]]},
+    "toilet":  {"type": "toilet",  "fan": false, "rects": [[2.58, 12.08, 7.08, 17.58]]},
+    "kitchen": {"type": "kitchen", "fan": false, "rects": [[2.58, 17.58, 10.16, 25.58]]}
+  },
+  "openings": [
+    {"room": "bedroom", "wall": "west", "from": 2.0,  "to": 4.7,  "kind": "window"},
+    {"room": "bedroom", "wall": "west", "from": 8.5,  "to": 11.0, "kind": "balcony_door"},
+    {"room": "toilet",  "wall": "west", "from": 14.7, "to": 16.3, "kind": "ventilator"},
+    {"room": "kitchen", "wall": "west", "from": 21.4, "to": 23.8, "kind": "window"},
+    {"room": "living",  "wall": "east", "from": 12.4, "to": 16.0, "kind": "window"},
+    {"room": "living",  "wall": "south", "from": 12.2, "to": 15.2, "kind": "window"},
+    {"room": "living",  "wall": "east", "from": 6.2,  "to": 9.2,  "kind": "entrance"}
+  ],
+  "balconies": [
+    {"room": "bedroom", "wall": "west", "depth": 2.58, "name": "balcony 11'9\" x 2'7\""},
+    {"room": "kitchen", "wall": "west", "depth": 2.58, "name": "service 8' x 2'7\""}
+  ],
+  "doors": [
+    {"rooms": ["bedroom", "living"],  "from": 9.0,  "to": 11.4},
+    {"rooms": ["toilet", "living"],   "from": 13.0, "to": 15.0},
+    {"rooms": ["kitchen", "living"],  "from": 7.2,  "to": 10.0, "kind": "doorway"}
+  ]
+}

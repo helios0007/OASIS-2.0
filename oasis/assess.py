@@ -33,9 +33,8 @@ def simulate_many(designs):
     return results
 
 
-def assess(p):
-    """Returns (summary, hourly, changes) for one building.
-    changes: one row per single design change, best first."""
+def single_changes(p):
+    """[(key, level)]: every design choice that differs from p by one setting."""
     options = []
     for key in CHOICES:
         if p.get("floor") == "middle" and key in ROOF_ONLY:
@@ -43,6 +42,13 @@ def assess(p):
         for level in SWEEP_LEVELS[key]:
             if level != p[key]:
                 options.append((key, level))
+    return options
+
+
+def assess(p):
+    """Returns (summary, hourly, changes) for one building.
+    changes: one row per single design change, best first."""
+    options = single_changes(p)
 
     designs = [dict(p, name="design")] + [
         dict(p, **{key: level}, name=f"{key}={level}") for key, level in options]

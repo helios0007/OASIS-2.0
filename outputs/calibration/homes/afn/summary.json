@@ -1,0 +1,153 @@
+{
+  "city": "Dhaka",
+  "airflow": "afn",
+  "homes": 12,
+  "best": {
+    "internal_mass_m2": 320.0,
+    "appliances_peak_w": 25.0,
+    "wall_leakage_cm2_per_m2": 32.0
+  },
+  "target": "air",
+  "fit_rmse_c": 1.07,
+  "fit_bias_c": 0.27,
+  "check_rmse_c": 1.02,
+  "check_bias_c": 0.24,
+  "swing_sim_c": 2.44,
+  "swing_meas_c": 2.64,
+  "peak_hour_sim": 14,
+  "peak_hour_meas": 17,
+  "per_home": [
+    {
+      "logger": "10692994",
+      "fit_rmse": 0.96,
+      "fit_bias": 0.28,
+      "check_rmse": 0.91,
+      "check_bias": -0.07
+    },
+    {
+      "logger": "10693003",
+      "fit_rmse": 1.25,
+      "fit_bias": 1.07,
+      "check_rmse": 1.24,
+      "check_bias": 1.12
+    },
+    {
+      "logger": "10706819",
+      "fit_rmse": 0.93,
+      "fit_bias": 0.61,
+      "check_rmse": 0.88,
+      "check_bias": 0.55
+    },
+    {
+      "logger": "10706822",
+      "fit_rmse": 1.05,
+      "fit_bias": 0.78,
+      "check_rmse": 0.82,
+      "check_bias": 0.58
+    },
+    {
+      "logger": "10706823",
+      "fit_rmse": 1.07,
+      "fit_bias": 0.78,
+      "check_rmse": 1.11,
+      "check_bias": 0.77
+    },
+    {
+      "logger": "10706824",
+      "fit_rmse": 0.92,
+      "fit_bias": 0.27,
+      "check_rmse": 0.83,
+      "check_bias": 0.45
+    },
+    {
+      "logger": "10706838",
+      "fit_rmse": 1.61,
+      "fit_bias": -1.35,
+      "check_rmse": 1.57,
+      "check_bias": -1.22
+    },
+    {
+      "logger": "10706841",
+      "fit_rmse": 1.0,
+      "fit_bias": 0.47,
+      "check_rmse": 0.85,
+      "check_bias": 0.32
+    },
+    {
+      "logger": "10706880",
+      "fit_rmse": 1.06,
+      "fit_bias": 0.8,
+      "check_rmse": 0.93,
+      "check_bias": 0.53
+    },
+    {
+      "logger": "10706889",
+      "fit_rmse": 1.04,
+      "fit_bias": -0.24,
+      "check_rmse": 1.05,
+      "check_bias": -0.16
+    },
+    {
+      "logger": "10706910",
+      "fit_rmse": 0.89,
+      "fit_bias": -0.52,
+      "check_rmse": 0.83,
+      "check_bias": -0.23
+    },
+    {
+      "logger": "10730029",
+      "fit_rmse": 1.11,
+      "fit_bias": 0.32,
+      "check_rmse": 1.25,
+      "check_bias": 0.21
+    }
+  ],
+  "other_target": {
+    "operative": {
+      "best": {
+        "internal_mass_m2": 320.0,
+        "appliances_peak_w": 25.0,
+        "wall_leakage_cm2_per_m2": 32.0
+      },
+      "target": "operative",
+      "fit_rmse_c": 1.25,
+      "fit_bias_c": 0.61,
+      "check_rmse_c": 1.17,
+      "check_bias_c": 0.51,
+      "swing_sim_c": 1.84,
+      "swing_meas_c": 2.64,
+      "peak_hour_sim": 16,
+      "peak_hour_meas": 17
+    }
+  },
+  "humidity": [
+    {
+      "logger": "10692994",
+      "rh_rmse_pct": 4.0,
+      "rh_bias_pct": 0.8,
+      "hours": 2592
+    },
+    {
+      "logger": "10693003",
+      "rh_rmse_pct": 4.9,
+      "rh_bias_pct": -4.1,
+      "hours": 2592
+    }
+  ],
+  "at_grid_edge": [
+    "appliances_peak_w",
+    "wall_leakage_cm2_per_m2"
+  ],
+  "adopted": {
+    "internal_mass_m2": 320.0,
+    "appliances_peak_w": 100.0,
+    "wall_leakage_cm2_per_m2": 8.0
+  },
+  "adopted_note": "Rule: a setting the data identify takes its best value; a setting they do not identify (mean RMSE changes by < 0.03 C over its whole range) takes a mid-grid value within 0.03 C of the best. internal_mass_m2 is identified (interior minimum at 320 m2). appliances_peak_w (25-200 W) and wall_leakage_cm2_per_m2 (2-32) are not: 100 W and 8 cm2/m2 are used.",
+  "adopted_scores": {
+    "fit_rmse": 1.11,
+    "check_rmse": 1.05,
+    "fit_bias": 0.37,
+    "check_bias": 0.32
+  }
+}

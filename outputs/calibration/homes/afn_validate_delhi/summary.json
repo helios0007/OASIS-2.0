@@ -1,0 +1,189 @@
+{
+  "city": "Delhi",
+  "airflow": "afn",
+  "settings_from": "Dhaka",
+  "settings": {
+    "internal_mass_m2": 320.0,
+    "appliances_peak_w": 100.0,
+    "wall_leakage_cm2_per_m2": 8.0
+  },
+  "homes": 17,
+  "periods": {
+    "first": [
+      "2016-05-01",
+      "2016-06-30"
+    ],
+    "second": [
+      "2016-07-01",
+      "2016-08-31"
+    ]
+  },
+  "target": "air",
+  "fit_rmse_c": 3.22,
+  "fit_bias_c": 2.23,
+  "check_rmse_c": 1.66,
+  "check_bias_c": 0.57,
+  "swing_sim_c": 3.64,
+  "swing_meas_c": 4.05,
+  "peak_hour_sim": 15,
+  "peak_hour_meas": 19,
+  "per_home": [
+    {
+      "logger": "10706834",
+      "fit_rmse": 2.06,
+      "fit_bias": -1.42,
+      "check_rmse": 1.46,
+      "check_bias": -0.55
+    },
+    {
+      "logger": "10692995",
+      "fit_rmse": 1.67,
+      "fit_bias": -0.89,
+      "check_rmse": 1.76,
+      "check_bias": -1.16
+    },
+    {
+      "logger": "10706812",
+      "fit_rmse": 3.6,
+      "fit_bias": 2.94,
+      "check_rmse": 1.37,
+      "check_bias": 0.53
+    },
+    {
+      "logger": "10706892",
+      "fit_rmse": 3.87,
+      "fit_bias": 3.49,
+      "check_rmse": 1.78,
+      "check_bias": 1.29
+    },
+    {
+      "logger": "10706888",
+      "fit_rmse": 2.1,
+      "fit_bias": -0.36,
+      "check_rmse": 1.83,
+      "check_bias": -0.19
+    },
+    {
+      "logger": "10706815",
+      "fit_rmse": 4.44,
+      "fit_bias": 3.99,
+      "check_rmse": 2.24,
+      "check_bias": 1.73
+    },
+    {
+      "logger": "10706887",
+      "fit_rmse": 3.07,
+      "fit_bias": 2.54,
+      "check_rmse": 1.56,
+      "check_bias": 0.63
+    },
+    {
+      "logger": "10706827",
+      "fit_rmse": 4.22,
+      "fit_bias": 3.85,
+      "check_rmse": 1.81,
+      "check_bias": 1.49
+    },
+    {
+      "logger": "10706833",
+      "fit_rmse": 3.16,
+      "fit_bias": 2.76,
+      "check_rmse": 1.33,
+      "check_bias": 0.73
+    },
+    {
+      "logger": "10706792",
+      "fit_rmse": 5.22,
+      "fit_bias": 4.79,
+      "check_rmse": 2.5,
+      "check_bias": 2.14
+    },
+    {
+      "logger": "10692990",
+      "fit_rmse": 3.84,
+      "fit_bias": 3.64,
+      "check_rmse": 1.9,
+      "check_bias": 1.36
+    },
+    {
+      "logger": "10706877",
+      "fit_rmse": 3.62,
+      "fit_bias": 3.13,
+      "check_rmse": 1.46,
+      "check_bias": 1.03
+    },
+    {
+      "logger": "10706817",
+      "fit_rmse": 3.22,
+      "fit_bias": 2.77,
+      "check_rmse": 1.18,
+      "check_bias": 0.53
+    },
+    {
+      "logger": "10706926",
+      "fit_rmse": 4.02,
+      "fit_bias": 3.64,
+      "check_rmse": 1.45,
+      "check_bias": 1.13
+    },
+    {
+      "logger": "10706810",
+      "fit_rmse": 2.32,
+      "fit_bias": 1.76,
+      "check_rmse": 1.3,
+      "check_bias": -0.44
+    },
+    {
+      "logger": "10706806",
+      "fit_rmse": 2.5,
+      "fit_bias": 2.02,
+      "check_rmse": 1.89,
+      "check_bias": -0.05
+    },
+    {
+      "logger": "10706813",
+      "fit_rmse": 1.79,
+      "fit_bias": -0.76,
+      "check_rmse": 1.41,
+      "check_bias": -0.43
+    }
+  ],
+  "humidity": [
+    {
+      "logger": "10692995",
+      "rh_rmse_pct": 8.4,
+      "rh_bias_pct": 0.5,
+      "hours": 2952
+    },
+    {
+      "logger": "10692990",
+      "rh_rmse_pct": 17.2,
+      "rh_bias_pct": -15.6,
+      "hours": 2952
+    }
+  ],
+  "with_evaporative_cooler": {
+    "homes": 14,
+    "target": "air",
+    "fit_rmse_c": 3.48,
+    "fit_bias_c": 2.89,
+    "check_rmse_c": 1.68,
+    "check_bias_c": 0.78,
+    "swing_sim_c": 3.65,
+    "swing_meas_c": 3.8,
+    "peak_hour_sim": 15,
+    "peak_hour_meas": 19
+  },
+  "without_evaporative_cooler": {
+    "homes": 3,
+    "target": "air",
+    "fit_rmse_c": 1.99,
+    "fit_bias_c": -0.85,
+    "check_rmse_c": 1.57,
+    "check_bias_c": -0.39,
+    "swing_sim_c": 3.58,
+    "swing_meas_c": 5.2,
+    "peak_hour_sim": 15,
+    "peak_hour_meas": 18
+  }
+}

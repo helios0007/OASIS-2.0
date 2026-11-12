@@ -25,3 +25,12 @@ outputs/*.idf
 *.shd
 *.mtr
 *.mtd
+
+# Rhino backups and lock files
+*.3dmbak
+*.rhl
+outputs/layout_runs/
+outputs/unit_cache/
+outputs/plans/
+outputs/fan_test/
+outputs/roof_test/

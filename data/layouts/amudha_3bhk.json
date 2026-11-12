@@ -1,0 +1,56 @@
+{
+  "name": "Amudha Elite 3BHK (1,208 sq ft)",
+  "source": "Developer marketing plan, 1630055833_amudha-elite-3bhk-3t-1-208-sq-ft-pooja-room-22393725.jpeg. Room sizes from the labels; positions from the drawing (not to scale), snapped so shared walls meet.",
+  "units": "ft",
+  "coordinates": "x to the right, y down from the top edge of the plan. The plan's top is taken as north (orientation_deg rotates it).",
+  "assumed": {
+    "north": "top of the plan",
+    "height_m": "3.0 (not on the plan)",
+    "window sizes": "widths from the drawing; heights by kind (see build_layout.OPENING_KINDS)",
+    "outside walls": "every wall with no room on the other side faces outdoors (party walls not shown on the plan)",
+    "internal doors": "open"
+  },
+  "height_m": 3.0,
+  "rooms": {
+    "bedroom_1": {"type": "bedroom", "fan": true,  "rects": [[2.58, 2.0, 15.0, 12.0]]},
+    "toilet_1":  {"type": "toilet",  "fan": false, "rects": [[15.0, 2.0, 19.83, 8.0]]},
+    "kitchen":   {"type": "kitchen", "fan": false, "rects": [[19.83, 2.0, 31.83, 9.0]]},
+    "toilet_2":  {"type": "toilet",  "fan": false, "rects": [[24.83, 9.0, 31.83, 13.33]]},
+    "bedroom_2": {"type": "bedroom", "fan": true,  "rects": [[19.83, 13.33, 31.83, 24.0]]},
+    "living":    {"type": "living",  "fan": true,  "rects": [[2.58, 12.0, 19.83, 24.0], [15.0, 8.0, 19.83, 12.0], [19.83, 9.0, 24.83, 13.33]]},
+    "pooja":     {"type": "pooja",   "fan": false, "rects": [[2.58, 24.0, 8.08, 28.0]]},
+    "bedroom_3": {"type": "bedroom", "fan": true,  "rects": [[9.83, 24.0, 19.83, 33.5], [8.08, 24.0, 9.83, 28.0]]},
+    "toilet_3":  {"type": "toilet",  "fan": false, "rects": [[19.83, 24.0, 23.83, 29.5]]}
+  },
+  "openings": [
+    {"room": "bedroom_1", "wall": "north", "from": 5.1,  "to": 9.1,  "kind": "window"},
+    {"room": "bedroom_1", "wall": "west",  "from": 2.7,  "to": 5.8,  "kind": "window"},
+    {"room": "bedroom_1", "wall": "west",  "from": 9.0,  "to": 11.5, "kind": "balcony_door"},
+    {"room": "toilet_1",  "wall": "north", "from": 16.5, "to": 18.5, "kind": "ventilator"},
+    {"room": "kitchen",   "wall": "north", "from": 24.9, "to": 28.3, "kind": "window"},
+    {"room": "kitchen",   "wall": "east",  "from": 3.5,  "to": 6.5,  "kind": "window"},
+    {"room": "toilet_2",  "wall": "east",  "from": 10.4, "to": 12.5, "kind": "ventilator"},
+    {"room": "bedroom_2", "wall": "east",  "from": 15.7, "to": 19.6, "kind": "window"},
+    {"room": "bedroom_2", "wall": "east",  "from": 20.5, "to": 23.5, "kind": "balcony_door"},
+    {"room": "living",    "wall": "west",  "from": 14.6, "to": 18.8, "kind": "window"},
+    {"room": "living",    "wall": "west",  "from": 21.0, "to": 23.5, "kind": "entrance"},
+    {"room": "pooja",     "wall": "west",  "from": 25.6, "to": 27.6, "kind": "ventilator"},
+    {"room": "toilet_3",  "wall": "south", "from": 21.3, "to": 23.3, "kind": "ventilator"},
+    {"room": "bedroom_3", "wall": "east",  "from": 30.0, "to": 33.0, "kind": "window"}
+  ],
+  "balconies": [
+    {"room": "bedroom_1", "wall": "west", "depth": 3.0,  "name": "balcony 9'7\" x 3'"},
+    {"room": "kitchen",   "wall": "east", "depth": 2.58, "name": "service 7'4\" x 2'7\""},
+    {"room": "bedroom_2", "wall": "east", "depth": 2.58, "name": "balcony 10'3\" x 2'7\""}
+  ],
+  "doors": [
+    {"rooms": ["bedroom_1", "living"], "from": 9.0,  "to": 11.6},
+    {"rooms": ["toilet_1", "living"],  "from": 15.5, "to": 18.0},
+    {"rooms": ["kitchen", "living"],   "from": 20.5, "to": 23.5, "kind": "doorway"},
+    {"rooms": ["bedroom_2", "living"], "from": 20.2, "to": 22.7},
+    {"rooms": ["toilet_2", "bedroom_2"], "from": 25.2, "to": 27.2},
+    {"rooms": ["pooja", "living"],     "from": 4.0,  "to": 6.5},
+    {"rooms": ["bedroom_3", "living"], "from": 16.8, "to": 19.3},
+    {"rooms": ["toilet_3", "bedroom_3"], "from": 25.0, "to": 27.2}
+  ]
+}

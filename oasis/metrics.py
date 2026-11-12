@@ -2,10 +2,27 @@
 import numpy as np
 import pandas as pd
 
+from pythermalcomfort.models import cooling_effect
+
 import config
 
-FAN_CREDIT_C = 2.0   # placeholder: fixed cooling effect of a ceiling fan
-SAFE_LIMIT_C = 41.0  # placeholder: NWS "Danger" band starts at 41 C
+SAFE_LIMIT_C = 41.0  # heat index "Danger" band (NWS / Steadman chart, 105 F); a chosen limit, not fitted
+
+# Ceiling fan: ASHRAE 55-2023 cooling effect (SET method, pythermalcomfort),
+# worked out every hour from the room's air and radiant temperature and humidity.
+FAN_AIR_SPEED_MS = 0.4   # room-average air speed with the fan on (same as agents.V_IN_ROOM)
+FAN_MET = 1.1            # seated, light activity (ASHRAE 55)
+FAN_CLO = 0.5            # light summer clothing (ASHRAE 55)
+FAN_CREDIT_C = 2.0       # display only: the cooling effect at 32 C / 70 % RH
+
+
+def fan_credit_c(t, mrt, rh):
+    """Cooling effect (C) of the fan at each hour, vs still air (0.1 m/s)."""
+    t, mrt, rh = (np.asarray(x, dtype=float) for x in (t, mrt, rh))
+    n = t.shape
+    ce = cooling_effect(tdb=t, tr=mrt, vr=np.full(n, FAN_AIR_SPEED_MS), rh=rh,
+                        met=np.full(n, FAN_MET), clo=np.full(n, FAN_CLO)).ce
+    return np.nan_to_num(np.asarray(ce, dtype=float), nan=0.0)
 
 
 def heat_index_c(t_c, rh):
@@ -46,7 +63,7 @@ def safe_hours(csv_path):
     cut = hour.between(config.CUT_START_HOUR, config.CUT_END_HOUR - 1)
 
     # Fan on: the person feels cooler. During the cut: no fan, no credit.
-    t_felt = t - np.where(cut, 0.0, FAN_CREDIT_C)
+    t_felt = t - np.where(cut, 0.0, fan_credit_c(t, t_mrt, rh))
     hi = pd.Series(heat_index_c(t_felt, rh))
     danger = hi >= SAFE_LIMIT_C
 
@@ -70,7 +87,7 @@ def peaks(hourly):
     """Two peaks, both from the same simulation:
     - the normal daily peak (the room's hottest hour, fan on), and
     - the peak during the power cut (fan off).
-    EnergyPlus doesn't model the fan; the cut only removes FAN_CREDIT_C here.
+    EnergyPlus doesn't model the fan; the cut only removes the fan credit here.
     So `by_hour` also shows what a one-hour cut would do at every hour of the
     day, without re-running EnergyPlus."""
     h = hourly.assign(day=np.arange(len(hourly)) // 24)

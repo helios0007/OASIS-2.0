@@ -42,6 +42,44 @@ def box_of(obj, scale):
     return lo, hi
 
 
+def from_plan(path, model):
+    """A room-by-room plan on the OASIS:: layers (rhino/draw_layout.py). The tool
+    then simulates it room by room (oasis/unit.py); the overall size and glass per
+    wall returned here are only for the sidebar summary."""
+    from oasis.build_layout import OPENING_KINDS
+    from oasis.read_layout_3dm import read_layout_3dm
+    lay = read_layout_3dm(path)
+    rects = [r for room in lay["rooms"].values() for r in room["rects"]]
+    x0, y0 = min(r[0] for r in rects), min(r[1] for r in rects)
+    x1, y1 = max(r[2] for r in rects), max(r[3] for r in rects)
+    length, width, height = x1 - x0, y1 - y0, lay["height_m"]
+    floor = sum((r[2] - r[0]) * (r[3] - r[1]) for r in rects)
+    areas = {"north": 0.0, "south": 0.0, "east": 0.0, "west": 0.0}
+    counts = dict.fromkeys(areas, 0)
+    for o in lay["openings"]:
+        if o["kind"] in ("window", "ventilator"):           # glass only; doors are opaque in the model
+            areas[o["wall"]] += (o["span"][1] - o["span"][0]) * OPENING_KINDS[o["kind"]]["height"]
+            counts[o["wall"]] += 1
+    wall_area = {"north": length * height, "south": length * height,
+                 "east": width * height, "west": width * height}
+    params = {"length_m": round(length, 3), "width_m": round(width, 3), "height_m": round(height, 3),
+              "orientation_deg": lay.get("orientation_deg", 0),
+              "window_area_m2": {s: round(a, 3) for s, a in areas.items() if a > 0}}
+    report = {
+        "file": path.name, "units": str(model.Settings.ModelUnitSystem).split(".")[-1],
+        "floor_area_m2": round(length * width, 1),
+        "windows": {s: {"count": counts[s], "area_m2": round(areas[s], 2),
+                        "share_of_wall_pct": round(100 * areas[s] / wall_area[s], 1)} for s in areas if counts[s]},
+        "window_to_wall_pct": round(100 * sum(areas.values()) / sum(wall_area.values()), 1),
+        "plan": True,
+        "inside_area_m2": round(floor, 1),
+        "rooms": len(lay["rooms"]),
+        "size": f"{len(lay['rooms'])} rooms · {floor:.1f} m² inside the walls · {height:.1f} m high",
+        "warnings": [],
+    }
+    return params, report
+
+
 def read_model(path):
     """Read a .3dm file. Returns (params, report):
     params  values to put on top of the baseline parameters
@@ -50,6 +88,8 @@ def read_model(path):
     model = rhino3dm.File3dm.Read(str(path))
     if model is None:
         raise ValueError(f"Could not read {path.name} as a Rhino .3dm file.")
+    if any(layer.FullPath.startswith("OASIS::room::") for layer in model.Layers):
+        return from_plan(path, model)
     scale, unit_name = unit_scale(model)
     warnings = []
 
@@ -74,7 +114,8 @@ def read_model(path):
     hi = tuple(max(r[1][i] for r in rooms) for i in range(3))
     length, width, height = (hi[i] - lo[i] for i in range(3))
     if min(length, width, height) <= 0.1:
-        raise ValueError("The room has no volume. It must be a 3D box.")
+        raise ValueError("The room has no volume. Draw it as a 3D box on a layer named \"room\", "
+                         "or draw a room-by-room plan on the OASIS:: layers (rhino/draw_layout.py).")
 
     # Each window: which wall is it on, and how big is it?
     areas = {"north": 0.0, "south": 0.0, "east": 0.0, "west": 0.0}

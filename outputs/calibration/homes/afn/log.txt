@@ -1,0 +1,37 @@
+Dhaka: 12 homes
+  10692994  brick_115 rcc_150         a=0.70 h=3.0 people 2  shaded east,north,south,west  windows north,south  night open True
+  10693003  brick_230 rcc_150_screed  a=0.70 h=3.0 people 4  shaded east,north,south,west  windows north,south  night open True
+  10706819  brick_230 rcc_150         a=0.70 h=3.0 people 4  shaded east,north,south       windows north,south  night open True
+  10706822  brick_115 rcc_150_screed  a=0.60 h=3.0 people 4  shaded east,north,south       windows north,south  night open True
+  10706823  brick_230 rcc_150         a=0.70 h=3.0 people 5  shaded east,north,south       windows north,south  night open True
+  10706824  brick_230 rcc_150_screed  a=0.60 h=3.0 people 6  shaded east,north,south,west  windows north,south  night open True
+  10706838  brick_115 rcc_150_screed  a=0.70 h=3.0 people 4  shaded east,north,south       windows north,south  night open True
+  10706841  brick_230 rcc_150         a=0.90 h=3.0 people 5  shaded east,north,south,west  windows north,south  night open True
+  10706880  brick_115 rcc_150_screed  a=0.60 h=2.7 people 4  shaded north,south,west       windows north,south  night open True
+  10706889  brick_115 rcc_150         a=0.60 h=3.0 people 4  shaded east,north,south       windows north,south  night open True
+  10706910  brick_230 rcc_150_screed  a=0.70 h=3.0 people 7  shaded east,north,south,west  windows north,south  night open True
+  10730029  brick_115 rcc_150         a=0.70 h=2.7 people 5  shaded east,north,south       windows north,south  night open True
+Simulating 1440 runs ...
+
+[air] top 5:
+                                                            fit_rmse  check_rmse  fit_bias  check_bias
+internal_mass_m2 appliances_peak_w wall_leakage_cm2_per_m2                                            
+320              25                32.0                         1.07        1.02      0.27        0.24
+                 50                32.0                         1.08        1.03      0.28        0.25
+                 100               32.0                         1.08        1.03      0.31        0.28
+160              25                32.0                         1.08        1.01      0.23        0.17
+                 50                32.0                         1.09        1.02      0.24        0.18
+
+[operative] top 5:
+                                                            fit_rmse  check_rmse  fit_bias  check_bias
+internal_mass_m2 appliances_peak_w wall_leakage_cm2_per_m2                                            
+320              25                32.0                         1.25        1.17      0.61        0.51
+                 50                32.0                         1.26        1.17      0.62        0.52
+                 100               32.0                         1.27        1.18      0.65        0.55
+640              25                32.0                         1.27        1.24      0.46        0.50
+320              25                16.0                         1.27        1.18      0.65        0.54
+
+Best (air): {'internal_mass_m2': 320.0, 'appliances_peak_w': 25.0, 'wall_leakage_cm2_per_m2': 32.0}
+Fit RMSE 1.07 °C (bias +0.27) | check RMSE 1.02 °C (bias +0.24) | daily swing 2.44 vs 2.64 | peak 14h vs 17h
+At the edge of the grid: ['appliances_peak_w', 'wall_leakage_cm2_per_m2']
+Humidity: [{'logger': '10692994', 'rh_rmse_pct': 4.0, 'rh_bias_pct': 0.8, 'hours': 2592}, {'logger': '10693003', 'rh_rmse_pct': 4.9, 'rh_bias_pct': -4.1, 'hours': 2592}]

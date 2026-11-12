@@ -1,0 +1,123 @@
+{
+  "city": "Dhaka",
+  "airflow": "afn",
+  "homes": 12,
+  "best": {
+    "internal_mass_m2": 320.0,
+    "appliances_peak_w": 100.0,
+    "wall_leakage_cm2_per_m2": 8.0
+  },
+  "fit_rmse_c": 1.13,
+  "fit_bias_c": 0.41,
+  "check_rmse_c": 1.07,
+  "check_bias_c": 0.34,
+  "swing_sim_c": 2.52,
+  "swing_meas_c": 2.64,
+  "peak_hour_sim": 14,
+  "peak_hour_meas": 17,
+  "per_home": [
+    {
+      "logger": "10692994",
+      "fit_rmse": 0.97,
+      "fit_bias": 0.37,
+      "check_rmse": 0.9,
+      "check_bias": 0.0
+    },
+    {
+      "logger": "10693003",
+      "fit_rmse": 1.45,
+      "fit_bias": 1.26,
+      "check_rmse": 1.39,
+      "check_bias": 1.26
+    },
+    {
+      "logger": "10706819",
+      "fit_rmse": 1.0,
+      "fit_bias": 0.71,
+      "check_rmse": 0.94,
+      "check_bias": 0.63
+    },
+    {
+      "logger": "10706822",
+      "fit_rmse": 1.38,
+      "fit_bias": 1.12,
+      "check_rmse": 1.06,
+      "check_bias": 0.84
+    },
+    {
+      "logger": "10706823",
+      "fit_rmse": 1.14,
+      "fit_bias": 0.87,
+      "check_rmse": 1.18,
+      "check_bias": 0.86
+    },
+    {
+      "logger": "10706824",
+      "fit_rmse": 1.09,
+      "fit_bias": 0.61,
+      "check_rmse": 1.01,
+      "check_bias": 0.71
+    },
+    {
+      "logger": "10706838",
+      "fit_rmse": 1.49,
+      "fit_bias": -1.18,
+      "check_rmse": 1.49,
+      "check_bias": -1.09
+    },
+    {
+      "logger": "10706841",
+      "fit_rmse": 0.85,
+      "fit_bias": 0.21,
+      "check_rmse": 0.75,
+      "check_bias": 0.11
+    },
+    {
+      "logger": "10706880",
+      "fit_rmse": 1.26,
+      "fit_bias": 0.99,
+      "check_rmse": 1.06,
+      "check_bias": 0.66
+    },
+    {
+      "logger": "10706889",
+      "fit_rmse": 1.01,
+      "fit_bias": 0.04,
+      "check_rmse": 1.04,
+      "check_bias": 0.08
+    },
+    {
+      "logger": "10706910",
+      "fit_rmse": 0.82,
+      "fit_bias": -0.34,
+      "check_rmse": 0.82,
+      "check_bias": -0.1
+    },
+    {
+      "logger": "10730029",
+      "fit_rmse": 1.07,
+      "fit_bias": 0.26,
+      "check_rmse": 1.21,
+      "check_bias": 0.15
+    }
+  ],
+  "humidity": [
+    {
+      "logger": "10692994",
+      "rh_rmse_pct": 4.0,
+      "rh_bias_pct": 0.5,
+      "hours": 2592
+    },
+    {
+      "logger": "10693003",
+      "rh_rmse_pct": 5.4,
+      "rh_bias_pct": -4.7,
+      "hours": 2592
+    }
+  ],
+  "at_grid_edge": [
+    "internal_mass_m2",
+    "appliances_peak_w",
+    "wall_leakage_cm2_per_m2"
+  ]
+}

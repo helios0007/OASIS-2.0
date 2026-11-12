@@ -6,7 +6,7 @@ OASIS (Overheating Assessment System for Intervention Strategies) predicts how m
 
 ## Status in one paragraph
 
-The full loop runs: a building is described by parameters or read from a Rhino model, Python writes an EnergyPlus model, EnergyPlus simulates the heatwave week, each hour is rated safe or in danger, and every design change is re-simulated and ranked. A sweep of 1,512 designs is stored, a fast prediction model is trained on it, and there are three front ends. **The results are not yet calibrated against measured homes**, so the numbers show that the method works, not what a real flat will do.
+The full loop runs: a building is described by parameters or read from a Rhino model, Python writes an EnergyPlus model, EnergyPlus simulates the heatwave week, each hour is rated safe or in danger, and every design change is re-simulated and ranked. A sweep of 1,512 designs is stored, a fast prediction model is trained on it, and there are three front ends. **The model is calibrated on 12 measured Dhaka homes (round 4, about 1.1 °C hourly error) and checked on Delhi**; there are no Chennai homes yet, so read results as model estimates under the stated assumptions.
 
 ## The pipeline
 
@@ -193,41 +193,75 @@ The best settings, one set for both groups, are below.
 | Calibrated, airflow 0.2 (keeps total air change near the Dhaka value) | 159 / 168 | 6 | 35.7 °C | 10 ach |
 | Calibrated, airflow 1.6 | 166 / 168 | 0 | 34.8 °C | 27 ach |
 
-The airflow factor was fitted against the Dhaka station's weak wind, and the Chennai file has airport wind. So the transferable result is the total air change, not the factor itself. The calibrated mean of 35.7 °C sits inside the 31 to 35 °C range of the Chennai SRIHER study, which supports the change. Switching the defaults would change every result, the 1,512-design sweep and the prediction model, so it is a decision still to be made.
+The airflow factor was fitted against the Dhaka station's weak wind, and the Chennai file has airport wind. So the transferable result is the total air change, not the factor itself. The calibrated mean of 35.7 °C sits inside the 31 to 35 °C range of the Chennai SRIHER study, which supports the change. Switching the defaults would change every result, the 1,512-design sweep and the prediction model, so it was left for round 4 (below), which is now adopted.
+
+## Calibration round 4: adopted (12 November 2026)
+
+Rounds 1 and 2 (above) fitted two average groups. Round 4 (`python calibrate_homes.py --airflow afn`) gives each of the 12 Dhaka homes its own model built from its survey, and fits only what no survey or standard gives.
+
+**From each home's survey:** wall (single or double brick), household size, which walls get sun (the rest face a neighbour across a 2 m lane), window layout and day/night opening from the ventilation codes, floor level (sets the wind at the windows), roof build-up ("concrete + cement" = 40 mm screed on the slab), roof colour or tar coating (solar absorptance), and ceiling height (low / normal / high = 2.7 / 3.0 / 3.3 m).
+
+**Air:** the EnergyPlus AirflowNetwork moves air through each window and crack from wind pressure and temperature difference, so no airflow factor is fitted.
+
+**Fitted (1,440 runs):** internal mass, appliance heat and wall leakage, on 16 May to 30 June 2016; checked on July and August.
+
+| | RMSE fit | RMSE check | Bias | Daily swing (sim / measured) | Peak hour (sim / measured) |
+|---|---|---|---|---|---|
+| Dhaka, 12 homes, adopted settings | 1.10 °C | 1.05 °C | +0.37 °C | 2.4 / 2.6 °C | 14:00 / 17:00 |
+| Indoor humidity, 2 homes with RH loggers | 4.0 and 4.9 % RH | | +0.8 and −4.1 % | | |
+
+**Adopted settings** (now the defaults in `oasis/build_idf.py`):
+
+| Setting | Before | Adopted | How well the data pin it down |
+|---|---|---|---|
+| Airflow model | simple, factor 0.2 | AirflowNetwork | method |
+| Internal mass (30 m² flat) | 0 m² | 320 m² | identified: clear minimum inside the range |
+| Appliance heat, evening peak | 600 W | 100 W | weak: 25–200 W all within 0.03 °C |
+| Wall leakage at 4 Pa | 2 cm²/m² | 8 cm²/m² | weak: 2–32 all within 0.03 °C |
+
+Rule: a setting the data identify takes its best value; one they do not takes a mid-range value within 0.03 °C of the best.
+
+**Validation on Delhi without refitting** (`--validate Delhi`, 17 homes):
+
+| Homes | May–June (hot, dry) | July–August (monsoon) |
+|---|---|---|
+| 3 without an evaporative cooler | RMSE 2.0 °C, bias −0.9 °C | RMSE 1.6 °C, bias −0.4 °C |
+| 14 with an evaporative cooler | RMSE 3.5 °C, bias +2.9 °C | RMSE 1.7 °C, bias +0.8 °C |
+
+The model has no evaporative cooler, so it reads too hot in those homes in the dry season, when coolers work. Coolers are rare and ineffective in humid Chennai, so this does not affect the Chennai use. Delhi without coolers is only three homes: transfer to a hotter, drier city is weaker than the Dhaka fit.
+
+**What did not work:** the brick-bat coba roof (`rcc_150_coba`) and the Dhaka cement screed add mass to the roof but do not move the simulated peak later (still 14:00). Scoring against the operative temperature (loggers hang on walls) moves the peak to 16:00 but fits worse overall (1.25 °C). The 3-hour peak lag remains unexplained.
 
 ## Known gaps and assumptions
 
-**The model does not yet match measured Chennai homes.** The Chennai study (Climate Trends and SRIHER, 2026) found indoor temperatures of about 31 to 35 °C, humidity above 75 % and a peak at 20:00 to 21:00. The baseline here runs 34 to 41.7 °C, with humidity near 44 % and a peak around 15:00. The simulated week is hotter and drier than the study period, and the flat is a top-floor worst case. The first calibration on Dhaka homes (above) brings the mean down to 35.7 °C, but those settings are not yet the defaults.
+What is calibrated and what is not:
 
-Assumptions that are placeholders or guesses, all as named constants in the code:
-
-| Assumption | Value | File |
-|---|---|---|
-| Danger limit | 41 °C heat index, to be replaced by health-based thresholds (Chen et al.) | `oasis/metrics.py` |
-| Fan benefit | 2 °C, to be replaced by the ASHRAE 55 cooling effect | `oasis/metrics.py` |
-| Airflow factor | 0.2, scales window airflow down from open-airport wind | `oasis/build_idf.py` |
-| Appliance heat | 600 W evening peak | `oasis/build_idf.py` |
-| Air leakage | 1 air change per hour | `oasis/build_idf.py` |
-| Material properties | Starting values; the AAC block figures were entered from memory | `oasis/build_idf.py` |
+| Part | Status |
+|---|---|
+| Internal mass, appliance heat, wall leakage, airflow method | **Calibrated** on 12 Dhaka homes (round 4), checked on Delhi |
+| Fan effect | **Standard:** ASHRAE 55-2023 cooling effect (SET), every hour, at 0.4 m/s room-average air speed, 1.1 met, 0.5 clo (`oasis/metrics.py`). About 2 °C, up to 3 °C in dry hours |
+| Danger limit | **Chosen, not fitted:** 41 °C heat index (NWS / Steadman "Danger", 105 °F). Health-based thresholds (Chen et al. 2024) not yet adopted |
+| Body check | **Standard:** JOS-3; 38 °C core limit (ISO 7933, WHO) |
+| Material properties | **Literature values**, not yet checked against ENS 2024 / ISHRAE (AAC especially) |
+| Chennai roof | Bare 150 mm RCC kept as the baseline; the TNUHDB coba roof is an option (+2 safe hours) |
+| Air speeds at the person, household, routine, clothing | **Assumptions** (`oasis/agents.py`) |
+| Glass, window opening share, opening hours | **Assumptions** (`oasis/build_idf.py`) |
+| Plans: shared walls, north, height | **Assumptions**, bounded where possible |
 
 Other gaps:
 
+- **No Chennai homes in the calibration.** Dhaka is the closest climate in the dataset; Chennai has stronger airport wind in the weather file.
 - **Cost:** not included, so changes are ranked by safe hours only.
 - **Microclimate:** the airport weather file is cooler than a dense street.
-- **One room, one week, one city.**
 
 ## Next steps
 
-1. Finish calibration. The first pass on Dhaka homes is done (see above). Still to do:
-   1. Decide whether to adopt the calibrated settings as defaults, then re-run the sweep and retrain the prediction model.
-   2. Try a heavier roof in place of the large internal mass.
-   3. Check humidity against the two Dhaka homes that logged it.
-   4. Check against the Delhi homes.
-2. Check material properties against ENS 2024.
-3. Replace the 41 °C limit and the 2 °C fan benefit with the health-based and ASHRAE methods.
-4. Add cost per measure and rank by safe hours per rupee.
-5. Add room size to the sweep, so the prediction model can answer for Rhino models without a live simulation.
-6. Review slides (step 8 of the start guide).
+1. Calibrate on Chennai homes (the April–May 2027 field campaign).
+2. Explain the 3-hour peak lag (logger placement, roof surface, or occupant window use).
+3. Check material properties against ENS 2024.
+4. Decide on health-based thresholds (Chen et al. 2024) in place of the 41 °C limit.
+5. Add cost per measure and rank by safe hours per rupee.
+6. Add room size to the sweep, so the prediction model can answer for Rhino models without a live simulation.
 
 ## File map
 
