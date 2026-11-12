@@ -10,7 +10,6 @@ Short shared notes between Claude Code and Antigravity (Gemini). Update after ch
 - **Status**: working — full pipeline, web tool, static HTML tool, Streamlit app, Round 2 Dhaka calibration, and JOS-3 + ISO 7933:2023 + Morris/Jay live human occupant agent engine (`oasis/agents.py`) are built.
 - **Last change**: Rebuilt `oasis/agents.py` on the real JOS-3 model (`pythermalcomfort`), fed by EnergyPlus air temp, mean radiant temp (new output) and RH; removed the hand-made PSI/heart-rate/radiant offsets; children (<18) listed but not modelled (JOS-3 is adult-only). Heat index safe hours stay the MAIN measure; the JOS-3 household (core < 38.0 °C, ISO 7933 limit) is the CHECK (`check` block in `/api/assess`). Web tool + Streamlit updated. Added `metrics.peaks()` → `/api/assess` `peaks` block + web panel "When a power cut hurts most" + Streamlit caption: normal daily peak (≈14:00, fan on) vs peak during the cut, plus felt heat with the fan off at each hour (cut is post-processing only, so no extra runs). Baseline: worst cut hour 18:00 (60.1 °C felt), the 20:00 cut is 47.0 °C.
 - **Open issues**:
-  - Not a git repo yet (no `git init` / `.gitignore`).
   - No validated thermoregulation model for children (JOS-3 child-size body reads 38.4 °C core at 25 °C); children are covered by the heat-index measure and this is a stated thesis limitation.
   - `docs/chennai_field_and_data_research.md` corrected: impossible figure, garbled citation and cost-effectiveness (now OASIS's own gains) fixed; remaining unverified claims and contacts marked ⚠ — verify before citing or emailing.
   - Calibration: `appliances_peak_w` (200 W) and `internal_mass_m2` (160 m²) sit at grid edges; simulated daily peak ~14:00 vs measured 16:00–17:00.
@@ -20,7 +19,7 @@ Short shared notes between Claude Code and Antigravity (Gemini). Update after ch
 
 ## Next steps
 
-1. [ ] Set up git + `.gitignore` (exclude `.venv/`, `__pycache__/`, heavy simulation outputs).
+1. [x] Git set up and pushed to https://github.com/helios0007/OASIS-2.0 (`main`); `.gitignore` excludes `.venv/`, `__pycache__/`, EnergyPlus run folders.
 2. [ ] Calibration: test the TNUHDB roof build-up (85 mm brick-bat coba + 12 mm mortar + 20 mm clay tile over RCC) and `internal_mass_m2 ≈ 75` (partitions) to move the simulated peak later.
 3. [ ] Check simulated indoor RH against the two Dhaka homes with humidity logs.
 4. [ ] Validate calibrated model on the Delhi homes (`data/measured/Delhi *.csv`).
