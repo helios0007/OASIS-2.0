@@ -176,14 +176,14 @@ const chartText = { catAxisLabelFontFace: "+mn-lt", valAxisLabelFontFace: "+mn-l
   arrow(s, 4.97, 3.85, 0, 0.55);
   card(s, 3.7, 4.45, 2.75, 1.25, "FDECE7");
   txt(s, "AC waste heat", { x: 3.95, y: 4.6, w: 2.3, h: 0.35, fontSize: 16, bold: true, color: C.accent5 });
-  txt(s, "+0.5 to +2 °C street air at night (Paris, Phoenix, Tokyo)", { x: 3.95, y: 4.97, w: 2.35, h: 0.7, fontSize: 12 });
+  txt(s, `Chennai, measured: the city centre is only +${sc(D.city.season.dawn_0530_d_temp_c, 1)} °C warmer at dawn`, { x: 3.95, y: 4.97, w: 2.35, h: 0.7, fontSize: 12 });
   arrow(s, 6.5, 5.07, 0.6);
   arrow(s, 11.12, 3.85, 0, 0.6);
   card(s, 7.2, 4.45, 5.5, 2.25, H.dk2);
   iconDot(s, I.home, 7.45, 4.65, 0.62, HEAT);
   txt(s, "The free-running flat next door", { x: 8.25, y: 4.7, w: 4.3, h: 0.5, fontSize: 18, bold: true, color: C.background1 });
   txt(s, "Windows open day and night: it breathes the warmer air, and loses its fan in the evening, when the concrete roof is still releasing the day's heat.", { x: 7.45, y: 5.4, w: 5.0, h: 1.2, fontSize: 14, color: C.background1 });
-  txt(s, "OASIS models the two arrows that reach the flat: hotter outdoor air (AC heat scenario) and the fan-off hour (power cut).", { x: 0.6, y: 5.95, w: 6.2, h: 0.75, fontSize: 13, italic: true, color: C.accent6 });
+  txt(s, "OASIS models the two arrows that reach the flat: the outdoor air (airport vs city centre, measured) and the fan-off hour (power cut).", { x: 0.6, y: 5.95, w: 6.2, h: 0.75, fontSize: 13, italic: true, color: C.accent6 });
   s.addNotes("The user's field observation: most neighbours have ACs. Running them at peak hours drives grid demand (and so power cuts) and dumps heat into the street. Research: Salamanca et al. 2014 (Phoenix, >1 °C at night), de Munck et al. 2013 (Paris, +0.5/+1/+2 °C), Ohashi et al. 2007 (Tokyo, +1–2 °C). The TN record demand of 2 May 2024 is from DT Next reporting.");
 
   // ================= 4. MVP question =================
@@ -277,8 +277,8 @@ const chartText = { catAxisLabelFontFace: "+mn-lt", valAxisLabelFontFace: "+mn-l
     ["Window use", "Open day and night", "Field knowledge; all calibration homes", "Observed"],
     ["Ceiling fan", "Cooling effect ~2 °C (0.4 m/s)", "ASHRAE 55-2023 SET, every hour", "Standard"],
     ["Power cut", "20:00–21:00 nightly, fan off", "Scenario; also tested at the hottest hour", "Chosen"],
-    ["Safe limit", "Heat index < 41 °C", "NWS “Danger” band", "Chosen"],
-    ["Neighbours' AC heat", "+1 °C at night (+2 °C doubled)", "Salamanca 2014, de Munck 2013, Ohashi 2007", "Literature"],
+    ["Safe limit", "Heat index < 41 °C; extended index as cross-check", "NWS “Danger” band; Lu & Romps 2022", "Chosen"],
+    ["City air and wind", `City centre +${sc(D.city.season.dawn_0530_d_temp_c, 1)} °C at dawn, wind ×${sc(D.city.season.wind_ratio_mean, 1)}`, "Nungambakkam vs airport, 2016–25", "Measured"],
   ];
   const hdr = ["Input", "Value used", "Source", "Type"].map((t) => ({ text: t, options: { bold: true, color: H.lt1, fill: { color: H.dk2 }, fontSize: 13 } }));
   const body = rows.map((r) => [
@@ -286,8 +286,8 @@ const chartText = { catAxisLabelFontFace: "+mn-lt", valAxisLabelFontFace: "+mn-l
     { text: r[3], options: { bold: true, color: tag(r[3]) } }]);
   s.addTable([hdr, ...body], { x: 0.6, y: 1.5, w: 12.1, colW: [2.3, 4.2, 4.1, 1.5], fontFace: "Calibri", fontSize: 13, color: H.dk1,
     border: { type: "solid", pt: 0.75, color: "E5E7EB" }, rowH: 0.56, valign: "middle", fill: { color: H.lt1 }, objectName: "inputs_table" });
-  txt(s, "Every “Chosen” and “Literature” input is labelled in the outputs; the headline uses measured weather without the AC heat.", { x: 0.6, y: 6.35, w: 12, h: 0.4, fontSize: 13, italic: true, color: C.accent6 });
-  s.addNotes("This is the assumption register. The user's preference: prefer measured inputs and flag every assumption that drives a result. The only literature-based input is the AC heat, kept as a scenario.");
+  txt(s, "Street-level AC heat (+1 °C at night) is the only literature input left: an upper case until the 2027 street logger.", { x: 0.6, y: 6.35, w: 12, h: 0.4, fontSize: 13, italic: true, color: C.accent6 });
+  s.addNotes("This is the assumption register. The user's preference: prefer measured inputs and flag every assumption that drives a result. The city-centre offsets come from Chennai's two IMD stations (check_city_weather.py); street AC heat stays a literature upper case.");
 
   // ================= Section: evidence =================
   section("02", "Evidence and calibration", "Measured homes first, then a model that reproduces them", "Evidence");
@@ -357,7 +357,7 @@ const chartText = { catAxisLabelFontFace: "+mn-lt", valAxisLabelFontFace: "+mn-l
   s.addNotes("Same air temperature, much higher humidity: the TMYx file is stitched from different years and smooths out humid spells. The heat index responds strongly to humidity.");
 
   // ================= Section: results =================
-  section("03", "Results", "Recorded heatwave, power-cut cases and neighbours' AC heat (full re-run on measured weather)", "Results");
+  section("03", "Results", "Recorded heatwave, power-cut cases, airport vs city-centre air (measured weather)", "Results");
 
   // ================= 14. Headline chart =================
   s = content("The typical-year file hides the heatwave", "Results");
@@ -372,19 +372,18 @@ const chartText = { catAxisLabelFontFace: "+mn-lt", valAxisLabelFontFace: "+mn-l
   s.addNotes("run_heatwave.py. This is the clearest single result for the MVP: with true weather the problem is severe; with a typical-year file it nearly disappears.");
 
   // ================= 15. Scenarios =================
-  s = content("Power-cut cases and neighbours' AC heat, top floor", "Results");
-  const shortW = (w) => (w.startsWith("measured") ? "Measured air" : w.includes("doubled") ? "+ AC heat doubled (+2 °C night)" : "+ neighbours' AC heat (+1 °C night)");
+  s = content("Power-cut cases and the air around the flat, top floor", "Results");
+  const shortW = (w) => (w.startsWith("airport") ? "Airport air" : w.startsWith("city-centre wind") ? "City wind only" : w.startsWith("city centre") ? "City centre air" : "Street AC heat +1 °C (literature)");
   const shortC = (c) => (c.startsWith("heatwave +") ? "Heatwave + cut 20–21 h" : c.startsWith("heatwave alone") ? "Heatwave alone (no cut)" : `Cut at peak heat (${String(peakHour).padStart(2, "0")}–${String(peakHour + 1).padStart(2, "0")} h)`);
   s.addChart(pres.charts.BAR, weathers.map((w) => ({ name: shortW(w), labels: cuts.map(shortC), values: cuts.map((c) => scv(w, "top floor", c).safe_hours) })),
-    Object.assign({ x: 0.6, y: 1.45, w: 7.8, h: 5.2, barDir: "col", barGrouping: "clustered", chartColors: [H.accent4, H.accent2, H.accent5], showValue: true, dataLabelPosition: "outEnd",
+    Object.assign({ x: 0.6, y: 1.45, w: 7.8, h: 5.2, barDir: "col", barGrouping: "clustered", chartColors: [H.accent4, H.accent3, H.accent6, H.accent5], showValue: true, dataLabelPosition: "outEnd",
       showLegend: true, legendPos: "b", valAxisMinVal: 0, valAxisMaxVal: 100, valAxisMajorUnit: 20, showTitle: true, title: "Safe hours of 168, top floor, recorded heatwave" }, chartText));
-  const m0 = weathers[0], m1 = weathers[1];
+  const m0 = weathers[0], mCity = weathers[2], mAC = weathers[3];
   const tc = (w, c) => scv(w, "top floor", c);
-  const nightLoss = tc(m0, cuts[0]).night_safe_hours_22_06 - tc(m1, cuts[0]).night_safe_hours_22_06;
   const ins = [
     [I.sun, "The heatwave is the main driver", `Fans on every hour: still only ${tc(m0, cuts[1]).safe_hours} safe hours. The cut adds ${tc(m0, cuts[1]).safe_hours - tc(m0, cuts[0]).safe_hours} more unsafe hours.`, HEAT],
     [I.bolt, "A cut at peak heat is the most intense", `Felt heat reaches ${tc(m0, cuts[2]).cut_max_heat_index_c} °C at ${String(peakHour).padStart(2, "0")}:00, vs ${tc(m0, cuts[0]).cut_max_heat_index_c} °C in the evening cut.`, DANGER],
-    [I.snow, "Neighbours' ACs cost the most after weather", `+1 °C at night: ${tc(m0, cuts[0]).safe_hours} → ${tc(m1, cuts[0]).safe_hours} safe hours; ${nightLoss} fewer safe sleeping hours (22–06 h).`, SLATE],
+    [I.city, "Where the flat stands matters", `City centre (sea breeze, measured): ${tc(mCity, cuts[0]).safe_hours} h vs airport ${tc(m0, cuts[0]).safe_hours}. Street AC heat, if +1 °C: ${tc(mAC, cuts[0]).safe_hours} h.`, SLATE],
   ];
   ins.forEach(([ic, h, b, col], i) => {
     const y = 1.45 + i * 1.75;
@@ -393,30 +392,33 @@ const chartText = { catAxisLabelFontFace: "+mn-lt", valAxisLabelFontFace: "+mn-l
     txt(s, h, { x: 9.65, y: y + 0.18, w: 2.95, h: 0.6, fontSize: 14.5, bold: true, color: C.text2 });
     txt(s, b, { x: 9.65, y: y + 0.78, w: 2.95, h: 0.8, fontSize: 12 });
   });
-  s.addNotes(`run_scenarios.py. One simulation per weather case; the power cut only removes the fan credit, so the three cut cases share it. Middle floor: ${cuts.map((c) => scv(m0, "middle floor", c).safe_hours).join(" / ")} h with measured air.`);
+  s.addNotes(`run_scenarios.py. One simulation per weather case; the power cut only removes the fan credit, so the three cut cases share it. Middle floor: ${cuts.map((c) => scv(m0, "middle floor", c).safe_hours).join(" / ")} h with airport air. City wind only (×${sc(D.city.heatwave_week.wind_ratio_mean, 2)}): ${tc(weathers[1], cuts[0]).safe_hours} h top floor.`);
 
-  // ================= 16. AC heat model =================
-  s = content("How neighbours' AC heat enters the model", "Results");
-  const prof = D.scenarios_meta.ac_warming_profile_c;
-  const pk = Object.keys(prof).filter((k) => !k.startsWith("measured"));
-  s.addChart(pres.charts.LINE, pk.map((k) => ({ name: shortW(k), labels: [...Array(24).keys()].map((h) => String(h).padStart(2, "0")), values: prof[k] })),
-    Object.assign({ x: 0.6, y: 1.45, w: 7.0, h: 4.6, chartColors: [H.accent2, H.accent5], lineSize: 3, lineDataSymbol: "none", showLegend: true, legendPos: "b",
-      valAxisMinVal: 0, valAxisMaxVal: 2.5, valAxisMajorUnit: 0.5, showTitle: true, title: "Added to measured outdoor air (°C), by hour of day", catAxisLabelFrequency: 3 }, chartText));
-  txt(s, "Dew point kept: split ACs condense water indoors, so the street air gets heat, not moisture.", { x: 0.6, y: 6.15, w: 7.0, h: 0.5, fontSize: 13, italic: true, color: C.accent6 });
-  const refs = [
-    ["Salamanca et al. 2014", "Phoenix heatwave, WRF + building model: negligible by day, > 1 °C at night"],
-    ["de Munck et al. 2013", "Paris: +0.5 °C today, +1 °C with dry units, +2 °C if AC heat doubles; larger at night"],
-    ["Ohashi et al. 2007", "Tokyo office districts: +1–2 °C on weekdays"],
-    ["CEEW (India)", "Home ACs run 5–7 h a day, mostly 22:00–06:00"],
+  // ================= 16. City vs airport (measured) =================
+  s = content("What Chennai's own stations show", "Results");
+  const off = (per) => D.city_offsets.filter((r) => r.period === per);
+  const offS = off("Apr-Jun 2016-2025"), offW = off("heatwave 1-7 May 2024");
+  const hrs = offS.map((r) => `${String(r.hour_ist).padStart(2, "0")}:30`);
+  s.addChart(pres.charts.BAR, [
+    { name: "Apr–Jun 2016–2025", labels: hrs, values: offS.map((r) => r.d_temp_c) },
+    { name: "Heatwave 1–7 May 2024", labels: hrs, values: offW.map((r) => r.d_temp_c) }],
+    Object.assign({ x: 0.6, y: 1.45, w: 7.0, h: 4.6, barDir: "col", barGrouping: "clustered", chartColors: [H.accent4, H.accent1], showValue: true,
+      dataLabelPosition: "outEnd", dataLabelFormatCode: "0.0", showLegend: true, legendPos: "b", valAxisMinVal: -2.5, valAxisMaxVal: 1, valAxisMajorUnit: 0.5,
+      valAxisLabelFormatCode: "0.0", showTitle: true, title: "City centre minus airport, air temperature (°C), by report time (IST)" }, chartText));
+  txt(s, `Nungambakkam (WMO 43278, ~4 km from the sea) vs Meenambakkam airport (WMO 43279), synoptic reports only; ${D.city.season.reports_per_hour}+ reports per time.`, { x: 0.6, y: 6.15, w: 7.0, h: 0.55, fontSize: 12, italic: true, color: C.accent6 });
+  const facts = [
+    ["Night: barely warmer", `+${sc(D.city.season.dawn_0530_d_temp_c, 1)} °C at 05:30 (season), ${sc(D.city.heatwave_week.dawn_0530_d_temp_c, 1)} °C in the heatwave week. City heat and AC heat together, at city scale.`],
+    ["Day: cooler, more humid", `${sc(D.city.season.afternoon_1430_d_temp_c, 1)} °C at 14:30: the sea breeze reaches the city centre before the airport.`],
+    ["Wind: less", `City wind ×${sc(D.city.season.wind_ratio_mean, 2)} of the airport's. In the model: ${tc(weathers[1], cuts[0]).safe_hours} vs ${tc(m0, cuts[0]).safe_hours} safe hours, a small effect.`],
+    ["So the airport is cautious", "For flats inland, the airport week is the fair (and worse) case. Street air beside AC units is not in either station: the 2027 logger."],
   ];
-  refs.forEach(([a, b], i) => {
-    const y = 1.45 + i * 1.12;
-    card(s, 8.0, y, 4.7, 1.0);
-    txt(s, a, { x: 8.2, y: y + 0.1, w: 4.3, h: 0.3, fontSize: 14, bold: true, color: C.accent1 });
-    txt(s, b, { x: 8.2, y: y + 0.42, w: 4.3, h: 0.55, fontSize: 12 });
+  facts.forEach(([a, b], i) => {
+    const y = 1.45 + i * 1.3;
+    card(s, 8.0, y, 4.7, 1.18);
+    txt(s, a, { x: 8.2, y: y + 0.1, w: 4.3, h: 0.3, fontSize: 14, bold: true, color: i === 3 ? C.accent5 : C.accent1 });
+    txt(s, b, { x: 8.2, y: y + 0.42, w: 4.3, h: 0.72, fontSize: 12 });
   });
-  txt(s, "Literature, not measured in Chennai: kept as a scenario. To measure in 2027: street logger beside AC outdoor units vs the airport.", { x: 8.0, y: 5.95, w: 4.7, h: 0.75, fontSize: 12.5, bold: true, color: C.accent5 });
-  s.addNotes("oasis/ac_heat.py. The airport station is at the city edge; it already includes whatever AC heat reaches it, so the added warming stands for a denser neighbourhood.");
+  s.addNotes("check_city_weather.py. Only 00-15 UTC synoptic reports are observations at Nungambakkam; the other hours in Meteostat's file are model fill and are dropped. The literature (Salamanca 2014 Phoenix >1 C at night; de Munck 2013 Paris +0.5/+1/+2 C) is street-scale; Chennai's city-scale dawn excess is +0.3 C. The +1 C street case is kept as an upper bound only.");
 
   // ================= 17. Design changes =================
   s = content("Which single design change helps most", "Results");
@@ -489,8 +491,8 @@ const chartText = { catAxisLabelFontFace: "+mn-lt", valAxisLabelFontFace: "+mn-l
 
   // ================= 21. Done / next =================
   s = content("Where the project stands", "Tool");
-  const done = ["Simulation core: eppy → EnergyPlus 26.2, AirflowNetwork", "Calibration round 4 on 12 Dhaka homes, Delhi check", "Measured evidence of the evening heat (loggers)", "Recorded Chennai heatwave as the default weather", "Windows open day and night (field knowledge)", "Power-cut cases + neighbours' AC heat scenario", `Full re-run: sweep ${D.sweep.designs.toLocaleString("en")}, surrogate, tools, Amudha plans`];
-  const next = ["Chennai field campaign 2027: indoor loggers + window-opening times", "Street logger beside AC outdoor units vs airport", "Calibrate on Chennai homes; fix the ~2 h early peak", "Choose interventions to test with residents", "Thesis submission, June 2027"];
+  const done = ["Simulation core: eppy → EnergyPlus 26.2, AirflowNetwork", "Calibration round 4 on 12 Dhaka homes, Delhi check", "Measured evidence of the evening heat (loggers)", "Recorded Chennai heatwave as the default weather", "Windows open day and night (field knowledge)", "Power-cut cases; city vs airport air (measured)", `Full re-run: sweep ${D.sweep.designs.toLocaleString("en")}, surrogate, tools, Amudha plans`];
+  const next = ["Chennai field campaign 2027: indoor loggers + window-opening times", "Street logger beside AC outdoor units vs airport", "Window sensors: settle the ~2 h early peak", "Choose interventions to test with residents", "Thesis submission, June 2027"];
   card(s, 0.6, 1.45, 6.2, 5.25);
   iconDot(s, I.check, 0.85, 1.65, 0.6, SAFE);
   txt(s, "Done", { x: 1.6, y: 1.7, w: 4, h: 0.5, fontSize: 22, bold: true, color: C.text2, valign: "middle" });
@@ -502,29 +504,34 @@ const chartText = { catAxisLabelFontFace: "+mn-lt", valAxisLabelFontFace: "+mn-l
   s.addNotes("HANDOFF.md holds the running state for both agents.");
 
   // ================= 22. Limitations =================
-  s = content("Limitations we state openly", "Tool");
+  s = content("Limitations: what we fixed, what stays open", "Tool");
+  const lagRow = (v) => find(D.lag, (r) => r.city === "Dhaka" && r.variant === v);
+  const lagCal = lagRow("as calibrated"), lagRoof = lagRow("heavier roof (coba)"), lagMass = lagRow("internal mass x2"), lagShut = lagRow("shut 10-17 h");
+  const top0 = tc(m0, cuts[0]);
+  const ST = { Fixed: SAFE, Measured: SAFE, Narrowed: AMBER, Open: SLATE };
   const lim = [
-    [I.clock, "Peak ~2 h early", "Model peaks 14:00 vs 17:00 measured; the cut hour is right in Dhaka."],
-    [I.sun, "Delhi evenings too cool", "−2 °C in hot-dry heat (3 homes): conservative there."],
-    [I.snow, "AC heat from literature", "+1/+2 °C from Phoenix, Paris, Tokyo; Chennai not measured yet."],
-    [I.users, "Children", "No validated child thermoregulation model; covered by heat index only."],
-    [I.therm, "Heat index range", "Very humid, hot hours sit at the edge of the NWS formula."],
-    [I.wind, "Airport wind", "Station wind is more open than a dense street; total air changes are what transfer."],
+    [I.therm, "Heat index range", "Fixed", `Extended heat index (Lu & Romps 2022) on every hour: ${top0.safe_hours_extended_hi} vs ${top0.safe_hours} safe h. NWS is the cautious choice.`],
+    [I.snow, "AC heat from literature", "Measured", `Chennai stations: city centre +${sc(D.city.season.dawn_0530_d_temp_c, 1)} °C at dawn (2016–25). +1 °C kept only as a street upper case.`],
+    [I.wind, "Airport wind", "Measured", `City wind ×${sc(D.city.season.wind_ratio_mean, 2)} of the airport's: ${tc(weathers[1], cuts[0]).safe_hours} vs ${top0.safe_hours} safe h. Small effect.`],
+    [I.clock, "Peak ~2 h early", "Narrowed", `Roof mass (coba) ${sc(lagRoof.lag_h, 1)} h, mass ×2 ${sc(lagMass.lag_h, 1)} h vs ${sc(lagCal.lag_h, 1)} h: not the cause. Shutting windows 10–17 h gives ${sc(lagShut.lag_h, 1)} h: window use, for the 2027 sensors.`],
+    [I.sun, "Delhi evenings too cool", "Open", "−2 °C in hot-dry heat (3 homes): conservative, outside the Chennai focus."],
+    [I.users, "Children", "Open", "No validated child thermoregulation model; covered by heat index only."],
   ];
-  lim.forEach(([ic, h, b], i) => {
+  lim.forEach(([ic, h, st, b], i) => {
     const x = 0.6 + (i % 3) * 4.1, y = 1.5 + Math.floor(i / 3) * 2.6;
     card(s, x, y, 3.8, 2.35);
-    iconDot(s, ic, x + 0.25, y + 0.25, 0.58, SLATE);
-    txt(s, h, { x: x + 1.0, y: y + 0.28, w: 2.65, h: 0.55, fontSize: 16, bold: true, color: C.text2, valign: "middle" });
-    txt(s, b, { x: x + 0.25, y: y + 1.0, w: 3.35, h: 1.2, fontSize: 13.5 });
+    iconDot(s, ic, x + 0.25, y + 0.25, 0.58, ST[st]);
+    txt(s, h, { x: x + 1.0, y: y + 0.2, w: 2.65, h: 0.4, fontSize: 15, bold: true, color: C.text2, valign: "middle" });
+    txt(s, st.toUpperCase(), { x: x + 1.0, y: y + 0.6, w: 2.65, h: 0.3, fontSize: 11, bold: true, color: ST[st] === SLATE ? C.accent6 : ST[st] });
+    txt(s, b, { x: x + 0.25, y: y + 1.0, w: 3.35, h: 1.25, fontSize: 12.5 });
   });
-  s.addNotes("Each limitation is either conservative (understates the problem) or labelled in the outputs.");
+  s.addNotes("Fixed / Measured: done now with Chennai data or a validated formula (check_city_weather.py, run_scenarios.py, metrics.heat_index_ext_c). Narrowed: check_lag.py ruled out roof and internal mass; window timing needs the 2027 sensors. Open: left as stated limitations.");
 
   // ================= 23. Closing =================
   pres.addSection({ title: "Closing" });
   s = pres.addSlide({ masterName: "TITLE_DARK", sectionTitle: "Closing" });
   s.addText("The problem is real", { placeholder: "title" });
-  s.addText(`Measured homes overheat in the evening. On a recorded Chennai heatwave, the calibrated flat is safe ${recTop.safe_hours} of 168 hours, the power cut is in danger ${recTop.nights_cut_in_danger} of 7 evenings, and neighbours' ACs push it down to ${tc(m1, cuts[0]).safe_hours}.`, { placeholder: "body" });
+  s.addText(`Measured homes overheat in the evening. On a recorded Chennai heatwave, the calibrated flat is safe ${recTop.safe_hours} of 168 hours, the power cut is in danger ${recTop.nights_cut_in_danger} of 7 evenings (airport air). In the city centre the sea breeze gives ${tc(mCity, cuts[0]).safe_hours} safe hours; street AC heat is the open question for 2027.`, { placeholder: "body" });
   txt(s, "Next: measure it in Chennai (2027 field campaign)", { x: 0.8, y: 6.3, w: 11, h: 0.4, fontSize: 14, color: C.accent4 });
   s.addNotes("Close on the MVP claim: the research problem exists, shown with measured inputs.");
 

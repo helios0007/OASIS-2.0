@@ -157,7 +157,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14p
   <header class="cmd-bar">
     <div class="cmd-brand">
       <div class="cmd-name">OASIS <span class="cmd-ver">2.0 WORKBENCH</span></div>
-      <div class="cmd-sub">Chennai · 1–7 May 2024 Recorded Heatwave · 20:00–21:00 Power Cut · <span id="nruns"></span> Stored EnergyPlus Runs</div>
+      <div class="cmd-sub">Chennai · 1–7 May 2024 Recorded Heatwave · <span id="sub-weather"></span> · 20:00–21:00 Power Cut · <span id="nruns"></span> Stored EnergyPlus Runs</div>
     </div>
     <div class="cmd-presets">
       <button type="button" class="preset-chip active" id="preset-base">Baseline Top-Floor</button>
@@ -172,6 +172,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14p
 
   <div class="wb-body">
     <aside class="pane-left">
+      <div class="insp-section">
+        <div class="insp-head"><span class="insp-tag">00</span><h3>Scenario: Outdoor Air</h3></div>
+        <form id="weather" class="choices-stack" autocomplete="off"></form>
+        <p id="weather-note" style="font-size:11.5px;color:var(--ink-2);margin-top:8px;line-height:1.45"></p>
+      </div>
       <div class="insp-section">
         <div class="insp-head"><span class="insp-tag">01</span><h3>Building &amp; Envelope Parameters</h3></div>
         <form id="inputs" class="choices-stack" autocomplete="off"></form>
@@ -200,7 +205,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14p
           </div>
           <div class="vp-hud">
             <div>
-              <div style="font-size:10.5px;color:var(--muted)" id="hud-day">10 May · Day 1</div>
+              <div style="font-size:10.5px;color:var(--muted)" id="hud-day"></div>
               <div class="hud-hour" id="hud-time">14:00 – 15:00</div>
               <div id="hud-band" style="font-size:10px;font-weight:700">DANGER</div>
             </div>
@@ -222,7 +227,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14p
           <div class="tm-track-col">
             <input type="range" id="hour-scrubber" min="0" max="167" value="14">
             <div class="tm-barcode" id="tm-barcode"></div>
-            <div class="tm-days"><span>10 May</span><span>11 May</span><span>12 May</span><span>13 May</span><span>14 May</span><span>15 May</span><span>16 May</span></div>
+            <div class="tm-days" id="tm-days"></div>
           </div>
         </div>
       </section>
@@ -256,7 +261,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14p
 
 <script>
 const D = __DATA__;
-const LIMIT = 41, HOURS = 168, FIRST_DAY = 10;
+const LIMIT = 41, HOURS = 168, FIRST_DAY = D.first_day, CUT = D.cut_hour;
 const ROOF_ONLY = ["roof", "roof_solar_absorptance"];
 const SITE = ["floor", "occupants"];
 const UI = {
@@ -278,6 +283,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 
 const DEFAULT = Object.fromEntries(KEYS.map(k => [k, D.levels[k].indexOf(D.baseline[k])]));
 let state = { ...DEFAULT };
+let weather = D.default_weather;      // which outdoor air (one stored sweep per case)
 let currentHour = 14, playTimer = null, activeView = "timeline";
 let camYaw = 38, camPitch = 26, isDragging = false, dragStart = { x: 0, y: 0, yaw: 38, pitch: 26 };
 
@@ -290,17 +296,17 @@ function hiColor(hi) {
 }
 const isMiddle = s => D.levels.floor[s.floor] === "middle";
 const keyOf = s => KEYS.map(k => (isMiddle(s) && ROOF_ONLY.includes(k)) ? 0 : s[k]).join("");
-const run = s => { const r = D.runs[keyOf(s)]; return { safe: r[0], cut: r[1], peak: r[2], deg: r[3], mean: r[4], max: r[5] }; };
+const run = s => { const r = D.cases[weather].runs[keyOf(s)]; return { safe: r[0], cut: r[1], peak: r[2], deg: r[3], mean: r[4], max: r[5] }; };
 const hiCache = {};
 function hiOf(s) {
-  const key = keyOf(s);
-  if (!hiCache[key]) {
-    const b = atob(D.hi[key]);
+  const key = keyOf(s), id = weather + key;
+  if (!hiCache[id]) {
+    const b = atob(D.cases[weather].hi[key]);
     const a = new Array(HOURS);
     for (let i = 0; i < HOURS; i++) a[i] = (b.charCodeAt(2 * i) | (b.charCodeAt(2 * i + 1) << 8)) / 10;
-    hiCache[key] = a;
+    hiCache[id] = a;
   }
-  return hiCache[key];
+  return hiCache[id];
 }
 const designKeys = s => KEYS.filter(k => !SITE.includes(k) && !(isMiddle(s) && ROOF_ONLY.includes(k)));
 function singleChanges(s) {
@@ -334,7 +340,18 @@ function buildInputs() {
   }).join("");
   $("inputs").addEventListener("change", e => { if (e.target.name in state) { state[e.target.name] = +e.target.value; update(); } });
 }
+function buildWeather() {
+  const cols = D.weathers.length === 3 ? "three-col" : "two-col";
+  $("weather").innerHTML = `<fieldset class="choice-fieldset"><div class="seg-grid ${cols}">` + D.weathers.map(w =>
+    `<label class="seg-option"><input type="radio" name="weather" value="${w.key}"${w.key === weather ? " checked" : ""}><span class="seg-card"><span class="seg-icon">${esc(w.label)}</span></span></label>`).join("") + `</div></fieldset>`;
+  $("weather").hidden = D.weathers.length < 2;
+  $("weather").addEventListener("change", e => { weather = e.target.value; update(); });
+  $("tm-days").innerHTML = Array.from({ length: 7 }, (_, d) => `<span>${FIRST_DAY + d} May</span>`).join("");
+}
 function syncInputs() {
+  const w = D.weathers.find(x => x.key === weather);
+  $("weather-note").innerHTML = `<b>${esc(w.source)}.</b> ${esc(w.note)}`;
+  $("sub-weather").textContent = `${w.label} Air`;
   KEYS.forEach(k => { $(`in-${k}-${state[k]}`).checked = true; });
   ROOF_ONLY.forEach(k => { $(`fs-${k}`).disabled = isMiddle(state); $(`hint-${k}`).hidden = !isMiddle(state); });
 }
@@ -346,7 +363,7 @@ function update() {
   const pctSafe = Math.round(r.safe / HOURS * 100);
   let nightPills = `<div class="night-pills">`;
   for (let d = 0; d < 7; d++) {
-    const hIdx = d * 24 + 20;
+    const hIdx = d * 24 + CUT;
     nightPills += `<div class="night-pill ${hiArr[hIdx] >= LIMIT ? "danger" : "safe"}" data-jump="${hIdx}">${FIRST_DAY + d}</div>`;
   }
   nightPills += `</div>`;
@@ -403,7 +420,7 @@ function updateAxonAndHud() {
   const hiArr = hiOf(state), r = run(state);
   const h = currentHour % 24, dayIdx = Math.floor(currentHour / 24);
   const pad = n => String(n).padStart(2, "0");
-  const hi = hiArr[currentHour], tout = D.t_out[currentHour], isCut = h === 20;
+  const hi = hiArr[currentHour], tout = D.cases[weather].t_out[currentHour], isCut = h === CUT;
   $("hud-day").textContent = `${FIRST_DAY + dayIdx} May · Day ${dayIdx + 1}`;
   $("hud-time").textContent = `${pad(h)}:00 – ${pad(h + 1)}:00`;
   $("hud-band").textContent = isCut ? "⚡ POWER CUT · FAN OFF" : (hi >= 41 ? "DANGER (≥ 41°C)" : "SAFE (< 41°C)");
@@ -449,7 +466,7 @@ function drawChart() {
     s += `<text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
   }
   for (let d = 0; d < 7; d++) {
-    const cx = x(d * 24 + 20), cw = Math.max(2, x(d * 24 + 21) - cx);
+    const cx = x(d * 24 + CUT), cw = Math.max(2, x(d * 24 + CUT + 1) - cx);
     s += `<rect x="${cx}" y="${m.t}" width="${cw}" height="${ph}" fill="var(--cut-wash)"/>`;
     s += `<text x="${x(d * 24 + 12)}" y="${H - 6}" text-anchor="middle">${FIRST_DAY + d} May</text>`;
   }
@@ -510,7 +527,7 @@ $("jump-peak").addEventListener("click", () => {
   const arr = hiOf(state); let m = 0; arr.forEach((v, i) => { if (v > arr[m]) m = i; });
   currentHour = m; $("hour-scrubber").value = m; updateAxonAndHud();
 });
-$("jump-cut").addEventListener("click", () => { currentHour = Math.floor(currentHour / 24) * 24 + 20; $("hour-scrubber").value = currentHour; updateAxonAndHud(); });
+$("jump-cut").addEventListener("click", () => { currentHour = Math.floor(currentHour / 24) * 24 + CUT; $("hour-scrubber").value = currentHour; updateAxonAndHud(); });
 $("jump-cool").addEventListener("click", () => { currentHour = Math.floor(currentHour / 24) * 24 + 6; $("hour-scrubber").value = currentHour; updateAxonAndHud(); });
 document.querySelectorAll("[data-view]").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -524,8 +541,9 @@ document.querySelectorAll("[data-view]").forEach(btn => {
 });
 
 $("nruns").textContent = D.n.toLocaleString("en-GB");
-$("sweeptxt").textContent = `${D.n.toLocaleString("en-GB")} EnergyPlus 26.2 runs embedded.`;
-$("surtxt").textContent = `XGBoost R² = ${D.surrogate.r2} (MAE ${D.surrogate.mae_hours.toFixed(1)}h).`;
+$("sweeptxt").textContent = `${D.n.toLocaleString("en-GB")} EnergyPlus 26.2 runs embedded for each of ${D.weathers.length} outdoor-air cases.`;
+$("surtxt").textContent = `XGBoost R² = ${D.surrogate.r2} (MAE ${D.surrogate.mae_hours.toFixed(1)}h), airport air.`;
+buildWeather();
 buildInputs();
 update();
 </script>

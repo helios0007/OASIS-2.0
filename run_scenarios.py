@@ -1,9 +1,15 @@
-"""Recorded heatwave, with and without neighbours' AC heat, three power-cut cases.
+"""Recorded heatwave: airport vs city-centre air (measured), three power-cut cases.
 
 The baseline flat (windows open day and night, no AC) on the recorded
-Chennai heatwave (1-7 May 2024, get_heatwave.py; 7 spin-up days), with the
-outdoor air as measured and with the waste heat of the neighbours' ACs
-added (oasis/ac_heat.py: +1 C at night today, +2 C if AC heat doubles).
+Chennai heatwave (1-7 May 2024, get_heatwave.py; 7 spin-up days), with four
+versions of the outdoor air (oasis/ac_heat.py):
+
+    airport (measured)           Meenambakkam, the default weather file
+    city-centre wind (measured)  airport air, wind x Nungambakkam/airport ratio
+    city centre (measured)       + Nungambakkam minus airport air temperature
+                                 and dew point, same week (check_city_weather.py)
+    street beside AC units       airport + 1 C at night: literature upper case,
+                                 not measured in Chennai (2027 street logger)
 
 Each simulation is scored three ways. EnergyPlus does not model the fan,
 so a power cut only removes the fan's cooling credit in that hour
@@ -12,8 +18,12 @@ so a power cut only removes the fan's cooling credit in that hour
     heatwave + power cut 20-21 h   the OASIS case (evening load shedding)
     heatwave alone                 fans work every hour
     power cut at peak heat         one-hour cut at the room's hottest hour
-                                   (from the measured-weather top floor run)
+                                   (from the airport-weather top floor run)
 
+Every result is also scored with the extended heat index (Lu & Romps 2022)
+as a cross-check of the NWS formula.
+
+    python check_city_weather.py   (once, for the measured offsets)
     python run_scenarios.py
 Outputs: outputs/scenarios/results.csv, hourly.csv, summary.json, safe_hours.png
 """
@@ -28,7 +38,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 import config
-from oasis.ac_heat import CURRENT_NIGHT_C, DOUBLED_NIGHT_C, add_ac_heat, warming_profile
+from oasis.ac_heat import STREET_AC_NIGHT_C, add_ac_heat, city_centre, warming_profile
 from oasis.build_idf import build_idf
 from oasis.metrics import SAFE_LIMIT_C, heat_index_c, safe_hours
 from oasis.params import BASELINE
@@ -37,20 +47,21 @@ from run_heatwave import INFO, SPINUP_DAYS
 
 OUT = config.OUT / "scenarios"
 EPW = config.ROOT / "data" / "weather" / "chennai_heatwave.epw"
-WEATHER = {                                   # name: extra night-time warming (C)
-    "measured outdoor air": 0.0,
-    f"+ neighbours' AC heat (+{CURRENT_NIGHT_C:g} C at night)": CURRENT_NIGHT_C,
-    f"+ AC heat doubled (+{DOUBLED_NIGHT_C:g} C at night)": DOUBLED_NIGHT_C,
-}
+CITY = config.OUT / "city_weather" / "summary.json"     # check_city_weather.py
+PROFILE = "heatwave_week"                                 # offsets measured in the same week
+WEATHER = ["airport (measured)", "city-centre wind (measured)", "city centre (measured)",
+           f"street beside AC units (+{STREET_AC_NIGHT_C:g} C at night, literature)"]
 DESIGNS = {"top floor": {"floor": "top"}, "middle floor": {"floor": "middle"}}
 EVENING_CUT = list(range(config.CUT_START_HOUR, config.CUT_END_HOUR))
 
 
-def weather_files():
-    files = {}
-    for name, dt in WEATHER.items():
-        files[name] = EPW if dt == 0 else add_ac_heat(EPW, OUT / f"chennai_heatwave_ac{dt:g}.epw", dt)
-    return files
+def weather_files(profile):
+    return dict(zip(WEATHER, [
+        EPW,
+        city_centre(EPW, OUT / "chennai_heatwave_city_wind.epw", profile, wind_only=True),
+        city_centre(EPW, OUT / "chennai_heatwave_city.epw", profile),
+        add_ac_heat(EPW, OUT / "chennai_heatwave_street_ac.epw"),
+    ]))
 
 
 def simulate(files, first):
@@ -90,9 +101,12 @@ def score(wname, dname, csv, cname, cut_hours):
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     info = json.loads(INFO.read_text())
-    scored = simulate(weather_files(), date.fromisoformat(info["week"]["start"]))
+    if not CITY.exists():
+        raise SystemExit("Run python check_city_weather.py first (measured city-centre offsets).")
+    profile = json.loads(CITY.read_text())["profile_24h"][PROFILE]
+    scored = simulate(weather_files(profile), date.fromisoformat(info["week"]["start"]))
 
-    # The room's hottest hour of the day: measured weather, top floor.
+    # The room's hottest hour of the day: airport weather, top floor.
     _, h0 = safe_hours(scored[0][2], ())
     peak_hour = int(h0.groupby("hour")["t_in"].mean().idxmax())
     cuts = {"heatwave + power cut 20-21 h": EVENING_CUT,
@@ -112,30 +126,31 @@ def main():
     (OUT / "summary.json").write_text(json.dumps({
         "limit_c": SAFE_LIMIT_C, "week": info["week"], "spinup_days": SPINUP_DAYS,
         "peak_heat_hour": peak_hour,
-        "ac_warming_profile_c": {w: list(warming_profile(dt)) for w, dt in WEATHER.items()},
+        "city_profile": {"source": str(CITY.relative_to(config.ROOT)), "period": PROFILE, **profile},
+        "street_ac_profile_c": list(warming_profile(STREET_AC_NIGHT_C)),
         "results": rows}, indent=2, default=str))
     plot(table, OUT / "safe_hours.png")
     pd.set_option("display.width", 250)
     print(f"Room's hottest hour: {peak_hour:02d}:00")
     print(table[["weather", "design", "power_cut", "safe_hours", "danger_hours", "nights_cut_in_danger",
-                 "cut_max_heat_index_c", "max_heat_index_c", "night_safe_hours_22_06",
+                 "cut_max_heat_index_c", "max_heat_index_c", "night_safe_hours_22_06", "safe_hours_extended_hi",
                  "mean_indoor_temp_c", "mean_outdoor_temp_c"]].to_string(index=False))
 
 
 def plot(table, png):
     cuts = list(table["power_cut"].unique())
     weathers = list(table["weather"].unique())
-    colours = ["#7f8c8d", "#e67e22", "#c0392b"]
+    colours = ["#7f8c8d", "#2e86c1", "#16a085", "#c0392b"]
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.6), sharey=True)
     for ax, dname in zip(axes, DESIGNS):
         d = table[table["design"] == dname]
         width = 0.8 / len(weathers)
         for k, (wname, colour) in enumerate(zip(weathers, colours)):
             vals = [int(d[(d["weather"] == wname) & (d["power_cut"] == c)]["safe_hours"].iloc[0]) for c in cuts]
-            xs = [i + (k - 1) * width for i in range(len(cuts))]
+            xs = [i + (k - (len(weathers) - 1) / 2) * width for i in range(len(cuts))]
             ax.bar(xs, vals, width, color=colour, label=wname)
             for x, v in zip(xs, vals):
-                ax.text(x, v + 2, str(v), ha="center", fontsize=8)
+                ax.text(x, v + 2, str(v), ha="center", fontsize=7)
         ax.set_xticks(range(len(cuts)))
         ax.set_xticklabels([c.replace(" (", "\n(").replace(" + ", "\n+ ") for c in cuts], fontsize=8)
         ax.set_title(f"{dname}, windows open, recorded heatwave 1-7 May 2024")

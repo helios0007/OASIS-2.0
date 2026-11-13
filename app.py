@@ -12,6 +12,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 import config
+from oasis import scenario
 from oasis.agents import DEFAULT_AGENTS, simulate_household
 from oasis.assess import assess
 from oasis.build_idf import MATERIALS, ROOFS, WALLS
@@ -48,12 +49,13 @@ def load_model(data: bytes, filename: str):
 
 
 @st.cache_data(show_spinner="Running parallel EnergyPlus 26.2 heat-balance simulations...")
-def cached_assess(params_items):
+def cached_assess(params_items, weather, cut_hours):
+    """weather: a case of oasis/scenario.py; cut_hours: hours of the day with no fan."""
     p = {k: (dict(v) if isinstance(v, tuple) else v) for k, v in params_items}
-    return assess(p)
+    return assess(p, scenario.weather_file(weather), list(cut_hours))
 
 
-def build_3d_svg(p, hi_val, tout_val, hour_of_day):
+def build_3d_svg(p, hi_val, tout_val, is_cut):
     L = max(3.0, min(12.0, float(p.get("length_m", 6.0))))
     W = max(3.0, min(12.0, float(p.get("width_m", 5.0))))
     H = max(2.4, min(5.0, float(p.get("height_m", 3.0))))
@@ -77,7 +79,6 @@ def build_3d_svg(p, hi_val, tout_val, hour_of_day):
     is_middle = p.get("floor") == "middle"
     has_insul = p.get("roof") == "rcc_150_insul_50"
     has_shade = float(p.get("shading_depth_m", 0.0)) > 0
-    is_cut = hour_of_day == config.CUT_START_HOUR
 
     svg = f'<svg viewBox="0 0 640 310" width="100%" height="290" style="background:radial-gradient(circle at 50% 45%, rgba(6,182,212,0.12), #0b111e 72%);border-radius:12px;border:1px solid rgba(148,163,184,0.2)">'
     svg += f'<polygon points="{pts([(x0,y0,z0),(x0,y1,z0),(x0,y1,z1),(x0,y0,z1)])}" fill="#92400e" fill-opacity="0.78" stroke="#f59e0b"/>'
@@ -125,7 +126,7 @@ def main():
     <div class="wb-banner">
       <div>
         <span style="color:#06b6d4;font-family:monospace;font-size:11px;font-weight:700">OASIS 2.0 · ENVIRONMENTAL & THERMAL SIMULATION WORKBENCH</span>
-        <h2 style="margin:0;font-size:20px;color:#f8fafc">Chennai Heatwave (1–7 May 2024, recorded) · Nightly 20:00–21:00 Power Cut</h2>
+        <h2 style="margin:0;font-size:20px;color:#f8fafc">Chennai Heatwave (1–7 May 2024, recorded) · Outdoor Air and Power Cut Set Under Scenario</h2>
       </div>
       <div style="font-size:12px;color:#cbd5e1">
         Safe Limit: <b>&lt; {SAFE_LIMIT_C:.0f} °C HI</b> · Ceiling Fan: <b>ASHRAE 55 cooling effect (about {FAN_CREDIT_C:.0f} °C)</b> · Full Web Studio also live at <a href="http://127.0.0.1:8000" target="_blank" style="color:#06b6d4;font-weight:700">http://127.0.0.1:8000</a>
@@ -184,28 +185,47 @@ def main():
                 format_func=lambda v, o=options: o[v], key=f"choice_{key}"
             )
 
+    # Scenario: which outdoor air, and when the one-hour power cut falls
+    with st.sidebar:
+        st.markdown("### 🌡️ 3. Scenario")
+        weathers = scenario.available()
+        weather = st.selectbox("Outdoor air", weathers, index=weathers.index(scenario.DEFAULT_WEATHER),
+                               format_func=lambda k: f"{scenario.WEATHERS[k]['label']} ({scenario.WEATHERS[k]['source'].lower()})")
+        st.caption(scenario.WEATHERS[weather]["note"])
+        cut_options = [None] + list(range(24))
+        cut_start = st.selectbox("Power cut (fans off)", cut_options, index=cut_options.index(config.CUT_START_HOUR),
+                                 format_func=lambda h: "No power cut" if h is None else f"{h:02d}:00–{(h + 1) % 24:02d}:00")
+    cut_hours = () if cut_start is None else (cut_start,)
+    first_day = config.RUN_START[1]
+
     p = dict(BASELINE, **geometry, **choices)
     items = tuple(sorted((k, tuple(sorted(v.items())) if isinstance(v, dict) else v) for k, v in p.items()))
-    summary, hourly, changes = cached_assess(items)
+    summary, hourly, changes = cached_assess(items, weather, cut_hours)
     agents_out = simulate_household(DEFAULT_AGENTS, hourly)   # JOS-3 check measure
 
     # Top KPI Strip
     pct = round(summary["safe_hours"] / summary["hours_total"] * 100)
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Thermal Autonomy (Safe Hours)", f"{summary['safe_hours']} / {summary['hours_total']} h", f"{pct}% of week safe")
-    k2.metric("Power-Cut Danger Nights", f"{summary['cut_hours_in_danger']} / 7 nights", f"{7 - summary['cut_hours_in_danger']}/7 cuts safe")
+    if cut_hours:
+        k2.metric("Power-Cut Hours in Danger", f"{summary['cut_hours_in_danger']} / 7 cuts", f"{7 - summary['cut_hours_in_danger']}/7 cuts safe")
+    else:
+        k2.metric("Power Cut", "none", "fans run every hour", delta_color="off")
     k3.metric("Peak Felt Heat Index", f"{summary['max_heat_index_c']:.1f} °C", f"Air peak {summary['max_indoor_temp_c']:.1f} °C", delta_color="inverse")
     k4.metric("Overheating Severity", f"{summary['degree_hours_over_limit']:.0f} °C·h", f"Above {SAFE_LIMIT_C:.0f} °C limit", delta_color="inverse")
 
     # Two peaks from the same run: the room's normal daily peak and the peak during the cut
     pk = peaks(hourly)
     n, c, w = pk["normal"], pk["cut"], pk["by_hour"][pk["worst_cut_hour"]]
-    st.caption(
-        f"**Normal peak:** hottest around {n['typical_hour']:02d}:00 (up to {n['max_indoor_temp_c']} °C air, "
-        f"{n['max_heat_index_c']} °C felt with the fan on). **During the {c['start_hour']:02d}:00–{c['end_hour']:02d}:00 cut:** "
+    cut_text = "" if c is None else (
+        f"**During the {c['start_hour']:02d}:00–{c['end_hour'] % 24:02d}:00 cut:** "
         f"up to {c['max_indoor_temp_c']} °C air, {c['max_heat_index_c']} °C felt, above {SAFE_LIMIT_C:.0f} °C on "
-        f"{c['nights_in_danger']}/{c['days']} nights. **Worst hour for a cut:** {w['hour']:02d}:00 "
-        f"({w['max_heat_index_no_fan_c']} °C felt with the fan off, {w['days_in_danger']}/{c['days']} days)."
+        f"{c['nights_in_danger']}/{c['days']} days. ")
+    st.caption(
+        f"**Outdoor air:** {scenario.WEATHERS[weather]['label']} ({scenario.WEATHERS[weather]['source'].lower()}). "
+        f"**Normal peak:** hottest around {n['typical_hour']:02d}:00 (up to {n['max_indoor_temp_c']} °C air, "
+        f"{n['max_heat_index_c']} °C felt with the fan on). {cut_text}**Worst hour for a cut:** {w['hour']:02d}:00 "
+        f"({w['max_heat_index_no_fan_c']} °C felt with the fan off, {w['days_in_danger']}/{pk['days']} days)."
     )
 
     # Main Workbench Split: Left = 3D Twin & Time Scrubber, Right = Passive Strategy Stack
@@ -213,10 +233,10 @@ def main():
 
     with col_viz:
         st.markdown("#### 🧊 3D Spatial & Solar Twin + 168-Hour Time Machine")
-        scrub_hr = st.slider("Scrub Hour of Heatwave Week (0 = 10 May 00:00, 167 = 16 May 23:00)", 0, 167, 14)
+        scrub_hr = st.slider(f"Scrub Hour of Heatwave Week (0 = {first_day} May 00:00, 167 = {first_day + 6} May 23:00)", 0, 167, 14)
         hi_now = float(hourly["heat_index"].iloc[scrub_hr])
         tout_now = float(hourly["t_out"].iloc[scrub_hr])
-        st.markdown(build_3d_svg(p, hi_now, tout_now, scrub_hr % 24), unsafe_allow_html=True)
+        st.markdown(build_3d_svg(p, hi_now, tout_now, bool(hourly["cut"].iloc[scrub_hr])), unsafe_allow_html=True)
         if report:
             st.caption(f"📦 **Rhino Geometry ({report['file']})**: {report['size']} · Floor area {report['floor_area_m2']} m² · Glazing {report['window_to_wall_pct']}% of walls")
 
@@ -234,7 +254,7 @@ def main():
                 <div style="background:#101829;border:1px solid rgba(148,163,184,0.18);border-left:4px solid #10b981;border-radius:8px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
                   <div>
                     <b style="color:#f8fafc">#{rank} {name_of(ch['parameter'], ch['value'])}</b>
-                    <div style="font-size:12px;color:#94a3b8">Reaches <b>{ch['safe_hours']} / 168 h</b> · Peak HI {d_peak:+.1f} °C · Cut danger: {ch['cut_hours_in_danger']}/7</div>
+                    <div style="font-size:12px;color:#94a3b8">Reaches <b>{ch['safe_hours']} / 168 h</b> · Peak HI {d_peak:+.1f} °C · Cut danger: {ch['cut_hours_in_danger']}/{7 if cut_hours else 0}</div>
                   </div>
                   <span style="font-size:20px;font-weight:700;color:#10b981;font-family:monospace">+{gain}h</span>
                 </div>
@@ -245,7 +265,7 @@ def main():
     # Analytics Tabs
     t0, t1, t2, t3 = st.tabs(["🧬 Household body check (JOS-3)", "🟧 7×24h Thermal Carpet Barcode", "📈 168-Hour Heatwave Timeline", "📋 Full Sensitivity Matrix"])
     with t0:
-        st.markdown(f"**Live Occupant Biometrics & First-Person Feedback at Hour {scrub_hr} ({10 + scrub_hr // 24} May, {scrub_hr % 24:02d}:00)**")
+        st.markdown(f"**Live Occupant Biometrics & First-Person Feedback at Hour {scrub_hr} ({first_day + scrub_hr // 24} May, {scrub_hr % 24:02d}:00)**")
         acols = st.columns(len(agents_out))
         for idx, ag in enumerate(agents_out):
             if not ag["modelled"]:
@@ -273,11 +293,12 @@ def main():
         ax_hm.set_facecolor("#0b111e")
         im = ax_hm.imshow(hi_matrix, aspect="auto", cmap="turbo", vmin=30, vmax=48)
         ax_hm.set_yticks(range(7))
-        ax_hm.set_yticklabels([f"{10+d} May" for d in range(7)], color="#cbd5e1", fontsize=9)
+        ax_hm.set_yticklabels([f"{first_day + d} May" for d in range(7)], color="#cbd5e1", fontsize=9)
         ax_hm.set_xticks(range(24))
         ax_hm.set_xticklabels([f"{h:02d}h" for h in range(24)], color="#cbd5e1", fontsize=8)
-        ax_hm.axvline(19.5, color="#fbbf24", lw=1.5, ls="--")
-        ax_hm.axvline(20.5, color="#fbbf24", lw=1.5, ls="--")
+        for h in cut_hours:                                   # the power-cut hour
+            ax_hm.axvline(h - 0.5, color="#fbbf24", lw=1.5, ls="--")
+            ax_hm.axvline(h + 0.5, color="#fbbf24", lw=1.5, ls="--")
         cbar = fig_hm.colorbar(im, ax=ax_hm, pad=0.02)
         cbar.ax.yaxis.set_tick_params(color="#cbd5e1")
         plt.setp(plt.getp(cbar.ax.axes, "yticklabels"), color="#cbd5e1", fontsize=8)

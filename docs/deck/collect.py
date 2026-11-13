@@ -62,6 +62,12 @@ d["calibration"] = json.loads(cal.read_text()) if cal.exists() else None
 mhi = OUT / "evidence" / "measured_heat_index.csv"
 d["measured_hi"] = pd.read_csv(mhi).to_dict("records") if mhi.exists() else None
 
+# Chennai city centre vs airport (measured) + lag variants
+d["city"] = json.loads((OUT / "city_weather" / "summary.json").read_text())
+d["city_offsets"] = pd.read_csv(OUT / "city_weather" / "offsets.csv").to_dict("records")
+lag = OUT / "evidence" / "lag_variants.csv"
+d["lag"] = pd.read_csv(lag).to_dict("records") if lag.exists() else None
+
 (Path(__file__).parent / "deck_data.json").write_text(json.dumps(d, indent=1, default=str).replace(": NaN", ": null"))
 print("baseline", summary["safe_hours"], "sweep", d["sweep"]["min"], d["sweep"]["max"], d["surrogate"])
 print([(c["parameter"], c["value"], c["safe_hours_gained"]) for c in d["changes"]])

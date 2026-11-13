@@ -21,7 +21,7 @@ from oasis.agents import (CORE_CAUTION_C, CORE_CRITICAL_C, CORE_LIMIT_C, DEFAULT
                           STEP_S, V_OUTDOORS, V_STILL, ZONES, feedback, routine, status_of)
 from oasis.build_layout import (DOOR_HEIGHT_M, OPENING_KINDS, OPPOSITE, build_layout_idf, load_layout,
                                 split_party, wall_segments, windowless_party, zone_id)
-from oasis.metrics import SAFE_LIMIT_C, fan_credit_c, heat_index_c
+from oasis.metrics import SAFE_LIMIT_C, fan_credit_c, heat_index_c, heat_index_ext_c
 from oasis.params import BASELINE
 from oasis.simulate import run
 
@@ -158,11 +158,13 @@ def run_people(agents, rooms, rh, cut):
 
 
 # --- Simulation ---------------------------------------------------------------
-def room_hourly(csv, lay):
+def room_hourly(csv, lay, cut_hours=None):
     df = pd.read_csv(csv)
     df.columns = df.columns.str.strip()   # EnergyPlus pads the last header
     hour = np.arange(len(df)) % 24
-    cut = (hour >= config.CUT_START_HOUR) & (hour < config.CUT_END_HOUR)
+    if cut_hours is None:
+        cut_hours = range(config.CUT_START_HOUR, config.CUT_END_HOUR)
+    cut = np.isin(hour, list(cut_hours))
     out = {"_out": {"t": df["Environment:Site Outdoor Air Drybulb Temperature [C](Hourly)"].to_numpy(),
                     "rh": df["Environment:Site Outdoor Air Relative Humidity [%](Hourly)"].to_numpy()}}
     for name, room in lay["rooms"].items():
@@ -171,7 +173,8 @@ def room_hourly(csv, lay):
         rh = df[f"{z}:Zone Air Relative Humidity [%](Hourly)"].to_numpy()
         mrt = df[f"{z}:Zone Mean Radiant Temperature [C](Hourly)"].to_numpy()
         credit = np.where(cut | (not room["fan"]), 0.0, fan_credit_c(t, mrt, rh))
-        out[name] = {"t": t, "rh": rh, "mrt": mrt, "hi": heat_index_c(t - credit, rh)}
+        out[name] = {"t": t, "rh": rh, "mrt": mrt, "hi": heat_index_c(t - credit, rh),
+                     "hi_ext": heat_index_ext_c(t - credit, rh)}
     return out, cut
 
 
@@ -201,6 +204,7 @@ def occupied_hourly(rooms_h, lay, cut):
     hi = pick("hi")
     return pd.DataFrame({"hour": hour, "t_out": rooms_h["_out"]["t"], "rh_out": rooms_h["_out"]["rh"],
                          "t_in": pick("t"), "t_mrt": pick("mrt"), "rh_in": pick("rh"), "heat_index": hi,
+                         "heat_index_ext": pick("hi_ext"),
                          "danger": hi >= SAFE_LIMIT_C, "cut": cut, "room": room})
 
 
@@ -210,7 +214,9 @@ def summary_of(h):
             "cut_hours_in_danger": int((h["danger"] & h["cut"]).sum()),
             "degree_hours_over_limit": round(float((hi - SAFE_LIMIT_C).clip(lower=0).sum()), 1),
             "max_heat_index_c": round(float(hi.max()), 1), "max_indoor_temp_c": round(float(t.max()), 1),
-            "mean_indoor_temp_c": round(float(t.mean()), 1)}
+            "mean_indoor_temp_c": round(float(t.mean()), 1),
+            "safe_hours_extended_hi": int((h["heat_index_ext"] < SAFE_LIMIT_C).sum()),
+            "max_extended_hi_c": round(float(h["heat_index_ext"].max()), 1)}
 
 
 def body_check(people, h):
@@ -238,7 +244,7 @@ def plan_geometry(path, party=None):
     return lay, segs
 
 
-def assess_plan(p, path, agents=None, party=None, lock=None, options=()):
+def assess_plan(p, path, agents=None, party=None, lock=None, options=(), epw=None, cut_hours=None):
     """The main tool's assessment for a room-by-room plan: the design p (the
     tool's settings) and each single change in `options` [(key, value)], all on
     the multi-room AirflowNetwork model. Returns the same parts as
@@ -249,7 +255,7 @@ def assess_plan(p, path, agents=None, party=None, lock=None, options=()):
     if party:
         base["party_walls"] = party
     designs = [base] + [dict(base, **{k: v}) for k, v in options]
-    tag = json.dumps([str(path), p, party, list(options)], sort_keys=True, default=str)
+    tag = json.dumps([str(path), p, party, list(options), str(epw), cut_hours], sort_keys=True, default=str)
     work = config.OUT / "unit_runs" / hashlib.sha1(tag.encode()).hexdigest()[:12]
     if lock:
         lock.acquire()
@@ -259,8 +265,8 @@ def assess_plan(p, path, agents=None, party=None, lock=None, options=()):
         if lock:
             lock.release()
     with ThreadPoolExecutor(max_workers=8) as pool:
-        csvs = list(pool.map(lambda j: run(j[0], j[1], config.EPW), jobs))
-    runs = [room_hourly(c, lay) for c in csvs]
+        csvs = list(pool.map(lambda j: run(j[0], j[1], epw or config.EPW), jobs))
+    runs = [room_hourly(c, lay, cut_hours) for c in csvs]
     shutil.rmtree(work, ignore_errors=True)
 
     rooms_h, cut = runs[0]
@@ -278,7 +284,8 @@ def assess_plan(p, path, agents=None, party=None, lock=None, options=()):
     changes.sort(key=lambda c: (-c["safe_hours_gained"], c["degree_hours_over_limit"]))
     unit = {
         "geometry": geometry(lay, segs),
-        "rooms": {n: {k: np.round(v, 1).tolist() for k, v in r.items()} for n, r in rooms_h.items() if n != "_out"},
+        "rooms": {n: {k: np.round(v, 1).tolist() for k, v in r.items() if k != "hi_ext"}
+                  for n, r in rooms_h.items() if n != "_out"},
         "people": people, "cut": [bool(x) for x in cut],
         "outdoor": {"t": np.round(rooms_h["_out"]["t"], 1).tolist()},
         "occupied_room": hourly["room"].tolist(),

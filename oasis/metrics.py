@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 
-from pythermalcomfort.models import cooling_effect
+from pythermalcomfort.models import cooling_effect, heat_index_lu
 
 import config
 
@@ -43,6 +43,16 @@ def heat_index_c(t_c, rh):
     return (hi_f - 32) * 5 / 9
 
 
+def heat_index_ext_c(t_c, rh):
+    """Extended heat index (Lu & Romps 2022, J. Appl. Meteor. Climatol. 61:1367,
+    doi:10.1175/JAMC-D-22-0021.1; pythermalcomfort). The NWS formula is a fit
+    to Steadman's table and drifts in very hot, humid air (the hours that
+    matter here); the extended index solves Steadman's body model for any
+    temperature and humidity. Used as the cross-check of every verdict."""
+    t, rh = np.atleast_1d(np.asarray(t_c, dtype=float)), np.atleast_1d(np.asarray(rh, dtype=float))
+    return np.asarray(heat_index_lu(t, np.clip(rh, 0, 100), round_output=False).hi, dtype=float)
+
+
 def column(df, text):
     """The first column whose name contains `text`."""
     return df[[c for c in df.columns if text in c][0]]
@@ -70,6 +80,7 @@ def safe_hours(csv_path, cut_hours=None):
     t_felt = t - np.where(cut, 0.0, fan_credit_c(t, t_mrt, rh))
     hi = pd.Series(heat_index_c(t_felt, rh))
     danger = hi >= SAFE_LIMIT_C
+    hi_ext = pd.Series(heat_index_ext_c(t_felt, rh))        # cross-check, same limit
 
     summary = {
         "hours_total": len(df),
@@ -80,10 +91,12 @@ def safe_hours(csv_path, cut_hours=None):
         "max_heat_index_c": round(float(hi.max()), 1),
         "max_indoor_temp_c": round(float(t.max()), 1),
         "mean_indoor_temp_c": round(float(t.mean()), 1),
+        "safe_hours_extended_hi": int((hi_ext < SAFE_LIMIT_C).sum()),
+        "max_extended_hi_c": round(float(hi_ext.max()), 1),
     }
     hourly = pd.DataFrame({"hour": hour, "t_out": t_out, "rh_out": rh_out,
                            "t_in": t, "t_mrt": t_mrt, "rh_in": rh,
-                           "heat_index": hi, "danger": danger, "cut": cut})
+                           "heat_index": hi, "heat_index_ext": hi_ext, "danger": danger, "cut": cut})
     return summary, hourly
 
 
@@ -106,15 +119,17 @@ def peaks(hourly):
         "max_heat_index_c": round(float(h["heat_index"].max()), 1),  # as felt (fan on)
     }
 
-    # Peak during the actual power cut.
+    # Peak during the actual power cut (None when the scenario has no cut).
     c = h[h["cut"]]
-    cut = {
-        "start_hour": config.CUT_START_HOUR, "end_hour": config.CUT_END_HOUR,
-        "max_indoor_temp_c": round(float(c["t_in"].max()), 1),
-        "max_heat_index_c": round(float(c["heat_index"].max()), 1),
-        "nights_in_danger": int(c.groupby("day")["danger"].any().sum()),
-        "days": days,
-    }
+    cut = None
+    if len(c):
+        cut = {
+            "start_hour": int(c["hour"].min()), "end_hour": int(c["hour"].max()) + 1,
+            "max_indoor_temp_c": round(float(c["t_in"].max()), 1),
+            "max_heat_index_c": round(float(c["heat_index"].max()), 1),
+            "nights_in_danger": int(c.groupby("day")["danger"].any().sum()),
+            "days": days,
+        }
 
     # If a one-hour cut fell at each hour of the day instead.
     by_hour = []
@@ -126,4 +141,4 @@ def peaks(hourly):
             "days_in_danger": int((g["hi_no_fan"] >= SAFE_LIMIT_C).sum()),
         })
     worst = max(by_hour, key=lambda r: (r["days_in_danger"], r["max_heat_index_no_fan_c"]))
-    return {"normal": normal, "cut": cut, "by_hour": by_hour, "worst_cut_hour": worst["hour"]}
+    return {"normal": normal, "cut": cut, "days": days, "by_hour": by_hour, "worst_cut_hour": worst["hour"]}

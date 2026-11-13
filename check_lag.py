@@ -11,6 +11,10 @@ coupling, not a new fitted number:
     as calibrated        windows open 24 h, half the glass opens (0.5)
     opening 0.25 / 0.1   less of the window open
     shut 10-17 h         open evening and night, shut in the hot hours
+    heavier roof         + clay tile, mortar and 85 mm brick-bat coba on the
+                         slab (the TNUHDB Chennai weathering course): more
+                         mass between the sun and the room
+    internal mass x2     twice the calibrated partitions and furniture
 
 Each variant is scored on the calibration homes (Dhaka 12, Delhi 3 without
 an evaporative cooler), fit period, like check_evening.py, plus
@@ -36,6 +40,8 @@ VARIANTS = {
     "opening 0.25": {"openable_fraction": 0.25},
     "opening 0.1": {"openable_fraction": 0.1},
     "shut 10-17 h": {"windows_open_steps": [(10, 1.0), (17, 0.0), (24, 1.0)]},
+    "heavier roof (coba)": {"roof": "rcc_150_coba"},
+    "internal mass x2": {"internal_mass_m2": 640.0},
 }
 MORNING = (6, 7, 8, 9)
 
@@ -57,7 +63,7 @@ def run_city(city, adopted):
     jobs, labels = [], []
     for name, change in VARIANTS.items():
         for i in keep:
-            p = dict(params[i], **adopted, **change, name=f"home {i}")
+            p = {**params[i], **adopted, **change, "name": f"home {i}"}
             jobs.append((build_idf(p, work / f"{len(jobs)}.idf"), work / str(len(jobs))))
             labels.append((name, i))
     print(f"{city}: {len(jobs)} runs ...")

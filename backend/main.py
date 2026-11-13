@@ -31,14 +31,16 @@ from oasis.agents import (
     CORE_CAUTION_C, CORE_CRITICAL_C, CORE_LIMIT_C, DEFAULT_AGENTS, MIN_AGE,
     V_IN_ROOM, V_STILL, V_UNDER_FAN, compare_with_heat_index, simulate_household,
 )
+from oasis import scenario
 from oasis.assess import assess, single_changes
+from oasis.box_view import box_unit
 from oasis.build_idf import (
     ACTIVITY_W, APPLIANCES_PEAK_W, GLASS_SHGC, GLASS_U,
     INFILTRATION_ACH, MATERIALS, ROOFS, WALLS,
 )
 from oasis.from_rhino import read_model
 from oasis.labels import LABELS
-from oasis.metrics import FAN_CREDIT_C, SAFE_LIMIT_C, peaks
+from oasis.metrics import FAN_AIR_SPEED_MS, FAN_CREDIT_C, SAFE_LIMIT_C, peaks
 from oasis.params import BASELINE, SWEEP_LEVELS
 from oasis.unit import assess_plan
 
@@ -106,6 +108,9 @@ class Building(BaseModel):
     # A room-by-room plan imported through /api/rhino (then geometry comes from the plan)
     plan_id: Optional[str] = Field(None, pattern=r"^[0-9a-f]{16}$")
     party_walls: Optional[str] = None      # None: as drawn; "windowless": every windowless wall shared
+    # Scenario (oasis/scenario.py): outdoor air, and the hour the one-hour power cut starts (None: no cut)
+    weather: str = scenario.DEFAULT_WEATHER
+    cut_start_hour: Optional[int] = Field(config.CUT_START_HOUR, ge=0, le=23)
 
 
 def check_choices(b: Building):
@@ -116,6 +121,8 @@ def check_choices(b: Building):
         raise HTTPException(422, f"Unknown wall type '{b.wall}'.")
     if b.roof not in ROOFS:
         raise HTTPException(422, f"Unknown roof type '{b.roof}'.")
+    if b.weather not in scenario.available():
+        raise HTTPException(422, f"Weather case '{b.weather}' is not available.")
     if b.party_walls not in (None, "windowless"):
         raise HTTPException(422, "party_walls must be empty or 'windowless'.")
     if b.plan_id and not (PLAN_DIR / f"{b.plan_id}.3dm").exists():
@@ -135,7 +142,8 @@ def health():
 def options():
     """Everything the front end needs to draw its form."""
     return {
-        "baseline": {k: BASELINE[k] for k in Building.model_fields if k in BASELINE},
+        "baseline": {**{k: BASELINE[k] for k in Building.model_fields if k in BASELINE},
+                     "weather": scenario.DEFAULT_WEATHER, "cut_start_hour": config.CUT_START_HOUR},
         "choices": [
             {"key": key, "title": title,
              "options": [{"value": value, "label": labels[value]}
@@ -150,6 +158,15 @@ def options():
             "cut_end_hour": config.CUT_END_HOUR,
             "safe_limit_c": SAFE_LIMIT_C,
             "fan_credit_c": FAN_CREDIT_C,
+            "fan_air_speed_ms": FAN_AIR_SPEED_MS,
+            "spinup_days": config.SPINUP_DAYS,
+            "weathers": [{"key": k, **v, "available": k in scenario.available()}
+                         for k, v in scenario.WEATHERS.items()],
+        },
+        "evidence": {
+            "heatwave": load_json_if_exists(config.ROOT / "data" / "weather" / "chennai_heatwave.json"),
+            "city": scenario.city_summary(),
+            "measured_evening": load_json_if_exists(config.OUT / "evidence" / "summary.json"),
         },
         "physics": {
             "walls": {
@@ -244,17 +261,24 @@ def assess_building(b: Building):
     dumped = b.model_dump(exclude_none=True)
     custom_agents = dumped.pop("agents", None)
     plan_id, party = dumped.pop("plan_id", None), dumped.pop("party_walls", None)
+    weather, cut_start = dumped.pop("weather"), dumped.pop("cut_start_hour", None)
+    cut_hours = [] if cut_start is None else [cut_start]
+    try:
+        epw = scenario.weather_file(weather)
+    except ValueError as error:
+        raise HTTPException(422, str(error))
+    scen = {"weather": weather, "cut_hours": cut_hours}
     p = dict(BASELINE, **dumped)
     if plan_id:
-        return assess_plan_building(p, plan_id, party, custom_agents or DEFAULT_AGENTS)
-    key = json.dumps(p, sort_keys=True)
+        return assess_plan_building(p, plan_id, party, custom_agents or DEFAULT_AGENTS, epw, scen)
+    key = json.dumps([p, scen], sort_keys=True)
 
     if key in CACHE:
         summary, hourly, changes = CACHE[key]
     else:
         with SIMULATION_LOCK:
             try:
-                summary, hourly, changes = assess(p)
+                summary, hourly, changes = assess(p, epw, cut_hours)
             except Exception as error:
                 raise HTTPException(500, f"The simulation failed: {error}")
         if len(CACHE) >= CACHE_LIMIT:
@@ -273,13 +297,16 @@ def assess_building(b: Building):
         BODY_CACHE[body_key] = (people, compare_with_heat_index(people, hourly))
     agents_out, check = BODY_CACHE[body_key]
 
-    return response(summary, hourly, changes, agents_out, check)
+    return response(summary, hourly, changes, agents_out, check, box_unit(p, hourly, agents_out), p, scen)
 
 
-def response(summary, hourly, changes, agents_out, check, unit=None):
+def response(summary, hourly, changes, agents_out, check, unit, p, scen):
     """What the front end gets back from /api/assess."""
+    unit["design"] = {k: p[k] for k in ("floor", "roof", "roof_solar_absorptance", "wall", "shading_depth_m")}
     return {
         "summary": summary,
+        "scenario": scen,
+        "cut": [bool(x) for x in hourly["cut"]],
         "heat_index": hourly["heat_index"].round(1).tolist(),
         "outdoor_temp": hourly["t_out"].round(1).tolist(),
         "indoor_temp": hourly["t_in"].round(1).tolist(),
@@ -300,20 +327,21 @@ def response(summary, hourly, changes, agents_out, check, unit=None):
     }
 
 
-def assess_plan_building(p, plan_id, party, roster):
+def assess_plan_building(p, plan_id, party, roster, epw, scen):
     """A room-by-room plan: the same results, on the multi-room model."""
-    key = json.dumps([p, plan_id, party, roster], sort_keys=True)
+    key = json.dumps([p, plan_id, party, roster, scen], sort_keys=True)
     if key not in CACHE:
         try:
             out = assess_plan(p, PLAN_DIR / f"{plan_id}.3dm", agents=roster, party=party,
-                              lock=SIMULATION_LOCK, options=single_changes(p))
+                              lock=SIMULATION_LOCK, options=single_changes(p),
+                              epw=epw, cut_hours=scen["cut_hours"])
         except (KeyError, TypeError, ValueError) as error:
             raise HTTPException(422, f"Check the plan or the household: {error}")
         except Exception as error:
             raise HTTPException(500, f"The simulation failed: {error}")
         if len(CACHE) >= CACHE_LIMIT:
             CACHE.pop(next(iter(CACHE)))
-        CACHE[key] = response(*out)
+        CACHE[key] = response(*out, p, scen)
     return CACHE[key]
 
 

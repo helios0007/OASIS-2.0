@@ -163,7 +163,8 @@ def simulate_agent(agent, hourly):
     body.clo = clo
 
     rows = {k: [] for k in ("t_core", "t_skin", "wettedness_pct", "sweat_gh",
-                            "zone", "activity", "pos", "status", "feedback")}
+                            "zone", "activity", "pos", "status", "feedback",
+                            "posture", "v", "t_air", "cardiac_lh")}
     sweat_today, sweat_days = 0.0, []
 
     for i, r in enumerate(hourly.itertuples(index=False)):
@@ -201,6 +202,10 @@ def simulate_agent(agent, hourly):
         rows["pos"].append([round(pos[0], 2), round(pos[1], 2)])
         rows["status"].append(status)
         rows["feedback"].append(feedback(status, t_core, wet, tdb, bool(r.cut), activity))
+        rows["posture"].append(posture)
+        rows["v"].append(v)
+        rows["t_air"].append(round(float(tdb), 1))
+        rows["cardiac_lh"].append(round(float(last["cardiac_output"][-1])))
 
     status = np.array(rows["status"])
     home = status != "away"

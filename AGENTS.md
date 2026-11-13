@@ -30,8 +30,8 @@ It is a design-stage simulation and decision-support tool for new residential bu
 - **Data Science & Surrogate ML**: `pandas`, `numpy`, `matplotlib`, `scikit-learn`, `xgboost` (`XGBRegressor` trained on a 1,512-design parameter sweep).
 - **3D Geometry Input**: `rhino3dm` for reading room bounding boxes (`room` / `zone` / `flat` layers) and glazing areas (`window` / `glaz` / `opening` layers) from `.3dm` files.
 - **Interfaces (3 Front Ends)**:
-  1. **Static HTML Tool** (`make_tool.py` + `tool/template.html` → `outputs/oasis_tool.html`): standalone lookup tool backed by the 1,512 pre-simulated sweep results.
-  2. **Streamlit Local App** (`app.py`): interactive local UI supporting `.3dm` uploads and live EnergyPlus simulations.
+  1. **Static HTML Tool** (`make_tool.py` + `tool/template.html` → `outputs/oasis_tool.html`): standalone lookup tool backed by the 1,512 pre-simulated sweep results for each outdoor-air case (airport / city centre / street AC, `oasis/scenario.py`).
+  2. **Streamlit Local App** (`app.py`): interactive local UI supporting `.3dm` uploads and live EnergyPlus simulations, with the same outdoor-air and power-cut-hour scenario choices as the web tool.
   3. **FastAPI + Vanilla JS Web Tool** (`run_server.py`, `backend/main.py`, `frontend/`): REST API (`/api/health`, `/api/options`, `/api/rhino`, `/api/assess`) and single-page web interface with live simulation, caching, and step-by-step intervention application.
 
 ### How to Run
@@ -40,7 +40,7 @@ Run all commands from the project root (`D:\IAAC\OASIS 2.0`) using the `.venv` P
 | Task | Command | Main Outputs |
 |---|---|---|
 | Run baseline + 3 MVP interventions | `python run_mvp.py` | `outputs/results.csv`, `outputs/hourly.csv`, `outputs/heat_index_week.png` |
-| Run full parameter sweep (1,512 runs) | `python run_sweep.py` | `outputs/sweep.csv`, `outputs/sweep_hourly.csv` |
+| Run full parameter sweep (1,512 runs) | `python run_sweep.py` (airport air); `--weather city` / `--weather street_ac` for the other cases | `outputs/sweep.csv`, `outputs/sweep_hourly.csv` (`sweep_<case>.csv`, `sweep_hourly_<case>.csv`) |
 | Train XGBoost surrogate model | `python train_surrogate.py` | `outputs/surrogate.json`, `outputs/surrogate_metrics.json`, `outputs/surrogate_check.png` |
 | Build standalone HTML tool | `python make_tool.py` | `outputs/oasis_tool.html` |
 | Assess a Rhino `.3dm` model in CLI | `python run_rhino.py data/rhino/sample_flat.3dm` | Prints safe hours and ranked interventions |
@@ -48,7 +48,8 @@ Run all commands from the project root (`D:\IAAC\OASIS 2.0`) using the `.venv` P
 | Calibration round 4 (adopted) / Delhi check | `python calibrate_homes.py --airflow afn` / `... --validate Delhi` | `outputs/calibration/homes/afn/summary.json`, `afn_validate_delhi/` |
 | Evening check (measured evidence + model at the cut hour) / lag test | `python check_evening.py` / `python check_lag.py` | `outputs/evidence/` |
 | Recorded Chennai heatwave (download + .epw) / MVP headline run | `python get_heatwave.py` / `python run_heatwave.py` | `data/weather/chennai_heatwave.epw`, `outputs/heatwave/` |
-| Recorded heatwave ± neighbours' AC heat × power cut 20–21 h / none / at peak heat | `python run_scenarios.py` | `outputs/scenarios/` |
+| City centre vs airport air (Nungambakkam vs Meenambakkam, measured) | `python check_city_weather.py` | `outputs/city_weather/` |
+| Recorded heatwave: airport / city wind / city centre / street AC +1 °C × power cut 20–21 h / none / at peak heat | `python run_scenarios.py` (after `check_city_weather.py`) | `outputs/scenarios/` |
 | Progress deck (numbers from outputs) | `python docs/deck/collect.py` then `node docs/deck/build.js` (needs pptxgenjs, react-icons, sharp; `PPTX_SKILL` for the theme step) | `docs/OASIS_2.0_progress.pptx` |
 | Plot calibration charts | `python plot_calibration.py` | `outputs/calibration/calibration_daily_cycle.png`, `calibration_timeseries.png` |
 | Start Streamlit app | `streamlit run app.py` | Local browser app (`http://localhost:8501`) |
@@ -78,7 +79,7 @@ There is no `pytest` suite yet; verification uses dedicated check scripts and AP
   - Surface vertices follow `UpperLeftCorner`, `Counterclockwise` (viewed from outside), `Relative` coordinates. At `orientation_deg = 0`, `length_m` runs east–west (north/south walls) and `width_m` runs north–south (east/west walls).
   - Construction material layers in `oasis/build_idf.py` are always listed **from outside to inside**.
 - **Visible assumptions & parameters**:
-  - Keep modelling constants explicit (`SAFE_LIMIT_C = 41.0` and the ASHRAE 55 fan settings in `oasis/metrics.py`; calibrated `DEFAULTS` in `oasis/build_idf.py`, from `calibrate_homes.py --airflow afn`).
+  - Keep modelling constants explicit (`SAFE_LIMIT_C = 41.0`, applied to the NWS heat index and, as a cross-check, the extended heat index `heat_index_ext_c`, and the ASHRAE 55 fan settings in `oasis/metrics.py`; calibrated `DEFAULTS` in `oasis/build_idf.py`, from `calibrate_homes.py --airflow afn`).
   - Use `setting(p, key)` in `oasis/build_idf.py` for calibration-tunable parameters (`airflow_factor`, `infiltration_ach`, `appliances_peak_w`, `internal_mass_m2`, `windows_open_hour`, `windows_close_hour`, `openable_fraction`) so calibration scripts can test overrides via parameter dicts without silently mutating baseline defaults.
 - **Code style & file hygiene**:
   - Write straightforward, well-commented Python with short functions and minimal dependencies.

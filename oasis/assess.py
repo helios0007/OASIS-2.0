@@ -19,16 +19,17 @@ WORK = config.OUT / "live_runs"   # temporary run folders, removed after use
 CHOICES = ("wall", "roof", "roof_solar_absorptance", "shading_depth_m", "night_vent")
 
 
-def simulate_many(designs):
-    """Simulate a list of parameter sets. Returns [(summary, hourly), ...]."""
+def simulate_many(designs, epw=None, cut_hours=None):
+    """Simulate a list of parameter sets. Returns [(summary, hourly), ...].
+    epw: weather file (default config.EPW); cut_hours: hours of the day with no fan."""
     batch = WORK / uuid.uuid4().hex[:8]
     # Model files are written one by one (eppy is not thread-safe) ...
     jobs = [(build_idf(p, batch / f"{i}.idf"), batch / str(i))
             for i, p in enumerate(designs)]
     # ... then EnergyPlus runs them side by side.
     with ThreadPoolExecutor(max_workers=8) as pool:
-        csvs = list(pool.map(lambda job: run(*job), jobs))
-    results = [safe_hours(csv) for csv in csvs]
+        csvs = list(pool.map(lambda job: run(*job, epw), jobs))
+    results = [safe_hours(csv, cut_hours) for csv in csvs]
     shutil.rmtree(batch, ignore_errors=True)
     return results
 
@@ -45,14 +46,14 @@ def single_changes(p):
     return options
 
 
-def assess(p):
+def assess(p, epw=None, cut_hours=None):
     """Returns (summary, hourly, changes) for one building.
     changes: one row per single design change, best first."""
     options = single_changes(p)
 
     designs = [dict(p, name="design")] + [
         dict(p, **{key: level}, name=f"{key}={level}") for key, level in options]
-    results = simulate_many(designs)
+    results = simulate_many(designs, epw, cut_hours)
     summary, hourly = results[0]
 
     changes = []

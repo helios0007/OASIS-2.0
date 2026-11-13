@@ -1,8 +1,9 @@
-// OASIS 2.0 — 3D tab of the main tool: the flat in 3D, felt heat per room, and
-// the household in the rooms their routine puts them in, with a status label on
-// each person. app.js calls window.OASIS3D.show(result.unit) after each run of a
-// room-by-room plan; the geometry is the plan the simulation read, so what is
-// drawn is exactly what was simulated. Plan coordinates: x east, y north, z up (m);
+// OASIS 2.0 — the 3D viewport of the workspace: the flat in 3D, felt heat per
+// room, and the household in the rooms their routine puts them in, with a status
+// label on each person. app.js calls window.OASIS3D.show(result.unit) after each
+// run (single room or room-by-room plan) and OASIS3D.setHour(h) from the
+// timeline; the geometry is what the simulation read, so what is drawn is
+// exactly what was simulated. Plan coordinates: x east, y north, z up (m);
 // three.js: x east, y up, -z north.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -16,7 +17,9 @@ const STATUS_LABEL = { safe: "Safe", caution: "Caution", danger: "Danger", criti
 const STATUS_HEX = { safe: 0x9aa5b1, caution: 0xe0a106, danger: 0xea580c, critical: 0xb91c1c, away: 0x9aa5b1 };
 
 const CUT_M = 1.5;                                  // section height of the cut-away view
-const state = { data: null, hour: 0, playing: null, focus: null, allDetails: false, fullWalls: false, viewKind: "3d" };
+const state = { data: null, hour: 0, focus: null, allDetails: false, wallMode: "cut", viewKind: "3d" };
+const ROOF_HEX = (a) => (a <= 0.25 ? 0xf5f5f4 : a <= 0.5 ? 0xb5afa3 : 0x6b665c);   // roof colour from solar absorptance
+const GRID = { major: new THREE.Color(0xc3c9d1), minor: new THREE.Color(0xd7dce2) };  // set from the theme
 
 // ---------------------------------------------------------------- colours
 const SAFE_C = new THREE.Color("#e7ecea"), WARM_C = new THREE.Color("#f5d9a8");
@@ -74,6 +77,10 @@ const M = {
   seat: new THREE.MeshStandardMaterial({ color: 0xc8c2ba, roughness: 0.85 }),
   ground: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }),
   edge: new THREE.LineBasicMaterial({ color: 0x8b8b93, transparent: true, opacity: 0.55 }),
+  shade: new THREE.MeshStandardMaterial({ color: 0xa8a29e, roughness: 0.9 }),
+  roofSlab: new THREE.MeshStandardMaterial({ color: 0xbdb9b3, roughness: 0.95, transparent: true, opacity: 0.5 }),
+  insul: new THREE.MeshStandardMaterial({ color: 0xe8d9a0, roughness: 0.9, transparent: true, opacity: 0.7 }),
+  dim: new THREE.LineBasicMaterial({ color: 0x8b8b93 }),
 };
 
 function box(x0, x1, y0, y1, z0, z1, mat, edges = true) {
@@ -100,7 +107,7 @@ function buildFlat(g) {
   for (const f of figures) { f.group.removeFromParent(); f.el.remove(); }
   flat = new THREE.Group();
   floorTiles = {}; roomTags = {}; figures = []; beds = {};
-  const H = state.fullWalls ? g.height_m : Math.min(CUT_M, g.height_m);   // drawn wall height
+  const H = state.wallMode === "cut" ? Math.min(CUT_M, g.height_m) : g.height_m;   // drawn wall height
 
   // Walls, split around their openings
   for (const w of g.walls) {
@@ -160,13 +167,38 @@ function buildFlat(g) {
     flat.add(alongBox(b.side, b.fixed, b.a1 - 0.1, b.a1, t0, t1, 0, 1.0, M.ext));
   }
 
-  // Ground and north arrow
+  // Window overhangs (only when the walls are drawn up to them)
+  for (const sh of g.shades || []) {
+    if (sh.z > H + 1e-6) continue;
+    flat.add(alongBox(sh.side, sh.fixed, sh.lo - 0.1, sh.hi + 0.1, TE, TE + sh.depth, sh.z, sh.z + 0.08, M.shade));
+  }
+
+  // Roof: slab, optional insulation, and the finish in the roof colour
+  const design = state.data?.design;
+  if (state.wallMode === "roof") {
+    const top = design?.floor !== "middle";
+    for (const r of all) {
+      const add = (z0, z1, mat) => { const m = box(r[0] - TE, r[2] + TE, r[1] - TE, r[3] + TE, z0, z1, mat); m.castShadow = false; flat.add(m); };
+      add(H, H + SLAB, M.roofSlab);
+      let z = H + SLAB;
+      if (top && String(design?.roof || "").includes("insul")) { add(z, z + 0.05, M.insul); z += 0.05; }
+      if (top) add(z, z + 0.015, new THREE.MeshStandardMaterial({ color: ROOF_HEX(design?.roof_solar_absorptance ?? 0.7), roughness: 0.9, transparent: true, opacity: 0.6 }));
+    }
+  }
+
+  // Ground, 1 m grid, overall dimensions and north arrow
   const cx = (bb[0] + bb[2]) / 2, cy = (bb[1] + bb[3]) / 2, span = Math.max(bb[2] - bb[0], bb[3] - bb[1]);
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(span * 1.6, 64), M.ground);
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(span * 4, 64), M.ground);
   ground.rotation.x = -Math.PI / 2;
-  ground.position.copy(P(cx, cy, -SLAB - 0.002));
+  ground.position.copy(P(cx, cy, -SLAB - 0.004));
   ground.receiveShadow = true;
   flat.add(ground);
+  const size = 2 * Math.ceil(span * 2);
+  const grid = new THREE.GridHelper(size, size, GRID.major, GRID.minor);
+  grid.position.copy(P(Math.round(cx), Math.round(cy), -SLAB - 0.002));
+  flat.add(grid);
+  dimension(bb[0], bb[2], bb[1] - TE - 0.7, "x");
+  dimension(bb[1], bb[3], bb[0] - TE - 0.7, "y");
   flat.add(northArrow(bb[2] + 1.6, bb[3] - 0.6, g.orientation_deg || 0));
 
   scene.add(flat);
@@ -175,7 +207,17 @@ function buildFlat(g) {
   sun.shadow.camera.right = sun.shadow.camera.top = span;
   sun.shadow.camera.far = span * 8;
   sun.shadow.camera.updateProjectionMatrix();
+}
 
+// A dimension line with its length, on the ground (axis "x": along east, at y = at)
+function dimension(a0, a1, at, axis) {
+  const z = -SLAB + 0.01, tick = 0.18;
+  const pt = (a, off) => (axis === "x" ? P(a, at + off, z) : P(at + off, a, z));
+  const pts = [pt(a0, 0), pt(a1, 0), pt(a0, -tick), pt(a0, tick), pt(a1, -tick), pt(a1, tick)];
+  flat.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), M.dim));
+  const el = document.createElement("div"); el.className = "dim-label"; el.textContent = `${(a1 - a0).toFixed(2)} m`;
+  const obj = new CSS2DObject(el); obj.position.copy(pt((a0 + a1) / 2, -0.35));
+  flat.add(obj);
 }
 
 function addBed(name, r) {
@@ -359,9 +401,10 @@ function renderTag(f, p, h) {
   f.el.innerHTML = `${card}<span class="tag-pill"><i class="dot st-${st}"></i><b>${first}</b><span class="mono">${value}</span></span>`;
 }
 
-function focusPerson(id) {
-  state.focus = state.focus === id ? null : id;
+function focusPerson(id, fromApp = false) {
+  state.focus = fromApp ? id : state.focus === id ? null : id;
   renderAll();
+  if (!fromApp) window.dispatchEvent(new CustomEvent("oasis3d-focus", { detail: state.focus }));
 }
 
 // ---------------------------------------------------------------- sun and time
@@ -394,22 +437,16 @@ function clock(h) {
   return `${sc.first_day + day} ${sc.month} · ${String(hh).padStart(2, "0")}:00`;
 }
 
-// ---------------------------------------------------------------- side panel
+// ---------------------------------------------------------------- readout (top right)
+const roomName = (n) => n.replace("_", " ");
 function renderSide() {
   const d = state.data, h = state.hour, g = d.geometry;
-  $("v3-hour-label").textContent = clock(h);
-  $("v3-people").innerHTML = d.people.map((p) => {
-    const H = p.hourly, st = H.status[h];
-    const where = H.room[h] ? `${H.room[h].replace("_", " ")} · ${H.activity[h].toLowerCase()}` : "away at work";
-    const val = !H.room[h] ? "" : p.modelled ? `${fmt(H.t_core[h], 2)} °C` : `${fmt(H.hi[h])} °C felt`;
-    return `<li><button type="button" data-id="${p.id}" aria-pressed="${state.focus === p.id}">
-      <i class="dot st-${st}"></i><span class="who"><b>${p.name}</b><span>${where}</span></span><span class="val">${val}</span></button></li>`;
-  }).join("");
-  $("v3-rooms").innerHTML = Object.entries(g.rooms).map(([n, r]) => {
+  const rows = Object.entries(g.rooms).map(([n, r]) => {
     const R = d.rooms[n];
-    return `<li><i class="sw" style="background:${cssHeat(R.hi[h])}"></i><span>${n.replace("_", " ")}${r.fan ? "" : ' <span class="muted sm">no fan</span>'}</span>
-      <span class="v">${fmt(R.hi[h])} °C</span><span class="v muted">${fmt(R.t[h])} °C</span></li>`;
+    return `<li><i class="sw" style="background:${cssHeat(R.hi[h])}"></i><span>${roomName(n)}${r.fan ? "" : ' <span class="muted sm">no fan</span>'}</span>
+      <span class="v">${fmt(R.hi[h])}</span><span class="v muted">${fmt(R.t[h])}</span></li>`;
   }).join("");
+  $("v3-rooms").innerHTML = `<li class="hd"><i></i><span>Room</span><span>felt °C</span><span>air °C</span></li>${rows}`;
   const cut = d.cut[h];
   $("v3-clock").textContent = clock(h);
   const note = $("v3-clock-note");
@@ -422,7 +459,7 @@ function renderRooms() {
   for (const [n, tiles] of Object.entries(floorTiles)) {
     const c = heatColor(d.rooms[n].hi[h]);
     for (const t of tiles) t.material.color.copy(c);
-    roomTags[n].el.innerHTML = `${n.replace("_", " ")}<span>${fmt(d.rooms[n].hi[h])} °C felt</span>`;
+    roomTags[n].el.innerHTML = `${roomName(n)}<span>${fmt(d.rooms[n].hi[h])} °C felt</span>`;
   }
 }
 
@@ -491,57 +528,43 @@ function declutter() {
 }
 
 function themeScene() {
-  const dark = document.documentElement.dataset.theme
-    ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-  const bg = getComputedStyle(document.body).getPropertyValue("--bg").trim() || (dark ? "#09090b" : "#fafafa");
-  scene.background = new THREE.Color(bg);
-  M.ground.color.set(dark ? 0x18181b : 0xffffff);
+  const css = getComputedStyle(document.documentElement);
+  const bg = new THREE.Color(css.getPropertyValue("--viewport").trim() || "#dfe3e8");
+  scene.background = bg;
+  M.ground.color.copy(bg);
+  GRID.major = new THREE.Color(css.getPropertyValue("--grid").trim() || "#c3c9d1");
+  GRID.minor = GRID.major.clone().lerp(bg, 0.55);
+  M.dim.color.copy(GRID.major).lerp(new THREE.Color(css.getPropertyValue("--fg").trim() || "#101216"), 0.35);
+  if (state.data) show(state.data, { keepView: true });
 }
 
 // ---------------------------------------------------------------- data
-function worstCutHour(d) {
-  const hi = d.occupied_room.map((room, i) => d.rooms[room].hi[i]);
-  let best = d.cut.findIndex(Boolean);
-  d.cut.forEach((c, i) => { if (c && hi[i] > hi[best]) best = i; });
-  return Math.max(0, best);
-}
-
-// keepView: a re-run of the same plan keeps the camera and the hour
-function show(data, { keepView = false, name = null } = {}) {
+// keepView: a re-run of the same model keeps the camera
+function show(data, { keepView = false, hour = null } = {}) {
   const same = keepView && state.data && state.data.geometry.name === data.geometry.name
     && JSON.stringify(state.data.geometry.walls) === JSON.stringify(data.geometry.walls);
   const cam = camera.position.clone(), tgt = controls.target.clone();
   state.data = data;
-  if (!same) { state.focus = null; state.hour = worstCutHour(data); }
+  if (!same) state.focus = null;
+  if (hour !== null) state.hour = hour;
   buildFlat(data.geometry);
   figures = data.people.map(makeFigure);
   if (same) { camera.position.copy(cam); controls.target.copy(tgt); } else setView(state.viewKind);
-  $("v3-hour").value = state.hour;
-  $("v3-ticks").innerHTML = data.cut.map((c, i) => (c ? `<i style="left:${(i / 167) * 100}%"></i>` : i % 24 === 0 && i ? `<i class="day" style="left:${(i / 167) * 100}%"></i>` : "")).join("");
-  const area = Object.values(data.geometry.rooms).flatMap((r) => r.rects).reduce((s, r) => s + (r[2] - r[0]) * (r[3] - r[1]), 0);
-  const party = data.scenario.party_walls;
-  $("v3-info").textContent = `${name || data.geometry.name} · ${Object.keys(data.geometry.rooms).length} rooms · ${area.toFixed(1)} m² inside the walls · `
-    + (party === "windowless" ? "windowless walls shared" : party === "drawn" ? "shared walls as drawn" : "all walls face outside");
   renderAll();
 }
 
-function setHour(h) { state.hour = h; $("v3-hour").value = h; renderAll(); }
+function setHour(h) { state.hour = h; renderAll(); }
 
 // ---------------------------------------------------------------- events
-$("v3-people").addEventListener("click", (e) => {
-  const b = e.target.closest("button[data-id]"); if (b) focusPerson(b.dataset.id);
-});
-$("v3-hour").addEventListener("input", (e) => setHour(Number(e.target.value)));
-$("v3-play").addEventListener("click", () => {
-  if (state.playing) { clearInterval(state.playing); state.playing = null; $("v3-play").textContent = "Play"; return; }
-  $("v3-play").textContent = "Pause";
-  state.playing = setInterval(() => setHour((state.hour + 1) % 168), 650);
-});
 $("v3-all-details").addEventListener("change", (e) => { state.allDetails = e.target.checked; renderAll(); });
 $("v3-view-3d").addEventListener("click", () => setView("3d"));
 $("v3-view-plan").addEventListener("click", () => setView("plan"));
-$("v3-full-walls").addEventListener("change", (e) => { state.fullWalls = e.target.checked; if (state.data) show(state.data, { keepView: true }); });
-renderer.domElement.addEventListener("click", () => { if (state.focus) { state.focus = null; renderAll(); } });
+document.querySelectorAll("[data-walls]").forEach((b) => b.addEventListener("click", () => {
+  state.wallMode = b.dataset.walls;
+  document.querySelectorAll("[data-walls]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  if (state.data) show(state.data, { keepView: true });
+}));
+renderer.domElement.addEventListener("click", () => { if (state.focus) focusPerson(state.focus); });
 
 // The tool's theme toggle sets data-theme on <html>
 new MutationObserver(themeScene).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
@@ -554,5 +577,5 @@ $("v3-scale-ticks").innerHTML = "<span>27</span><span>41 °C limit</span><span>5
 themeScene();
 resize();
 loop();
-window.OASIS3D = { show, setHour };
+window.OASIS3D = { show, setHour, focus: (id) => focusPerson(id, true) };
 window.dispatchEvent(new Event("oasis3d-ready"));

@@ -1,9 +1,11 @@
 // ============================================================================
-// OASIS 2.0 · web tool (front end for backend/main.py)
+// OASIS 2.0 · workspace (front end for backend/main.py)
 //
-// Flow: intro -> inputs -> POST /api/assess -> safe hours + every single
-// change ranked. Applying a change makes it the new design and re-simulates;
-// every run is kept in a design history so the user can step back.
+// Layout: model panel (left) -> POST /api/assess -> 3D viewport + timeline
+// (centre) and results inspector (right). One hour of the week is "current"
+// everywhere: the 3D view, the timeline cursor, the week grid and the people.
+// Applying a change makes it the new design and re-simulates; every run is
+// kept in a design history so the user can step back.
 // ============================================================================
 
 const $ = id => document.getElementById(id);
@@ -11,32 +13,38 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 const clamp01 = x => Math.max(0, Math.min(1, x));
 const pad = n => String(n).padStart(2, "0");
 const HOURS = 168;
-const TOP_CHANGES = 5;   // changes shown before "Show all"
+const TOP_CHANGES = 6;   // changes shown before "Show all"
 
-// Which control each design choice uses, and where it sits in the sidebar
+// Which control each design choice uses, and which panel section holds it
 const ORIENTATION = { key: "orientation_deg", title: "Windows face",
   options: [{ value: 0, label: "North & South" }, { value: 90, label: "East & West" }] };
-const BASICS = [["floor", "seg"], ["orientation_deg", "seg"], ["roof_solar_absorptance", "swatch"], ["night_vent", "switch"]];
-const DETAILS = [["wall", "select"], ["roof", "select"], ["shading_depth_m", "seg"], ["occupants", "seg"]];
+const SECTIONS = {
+  "ctl-geometry": [["floor", "seg"], ["orientation_deg", "seg"]],
+  "ctl-envelope": [["wall", "select"], ["roof", "select"], ["roof_solar_absorptance", "swatch"], ["shading_depth_m", "seg"]],
+  "ctl-use": [["night_vent", "switch"], ["occupants", "seg"]],
+};
+const CONTROLS = [...Object.values(SECTIONS).flat(), ["weather", "seg"]];
 const ROOF_ONLY = ["roof", "roof_solar_absorptance"];        // no effect on a middle floor
 const ROOF_SWATCH = { 0.7: "#6b665c", 0.4: "#b5afa3", 0.2: "#ffffff" };
-const TITLES = { occupants: "People (internal heat)", night_vent: "Open windows at night" };
+const TITLES = { occupants: "People (internal heat)", night_vent: "Windows open at night", roof: "Roof build-up",
+  shading_depth_m: "Window overhang", weather: "Outdoor air" };
 
 let OPT = null;          // /api/options
-let state = {};          // current design (Building fields)
+let state = {};          // current design + scenario (Building fields)
 let roster = [];         // household for the JOS-3 check
 let model = null;        // Rhino geometry, or null
 let result = null;       // last /api/assess response
 let ranFor = null;       // payload text of the last result
-let preview = null;      // change chosen in "Compare with"
+let preview = null;      // change compared in the timeline
 let trail = [];          // [{label, safe, snapshot}]
 let pendingLabel = null; // label for the next history entry
 let requestNo = 0;
-let hour = 116;          // hour shown in readouts (14 May, 20:00: a power cut)
+let hour = 20;           // current hour of the week
+let hourFor = null;      // scenario + model the current hour was picked for
 let activeIdx = 0;       // highlighted person
 let playTimer = null;
 let showAll = false;
-let tab = "overview";
+let tab = "summary";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -57,29 +65,35 @@ function status(text, kind) {
 }
 
 const limit = () => OPT.scenario.safe_limit_c;
-const choice = key => key === ORIENTATION.key ? ORIENTATION : OPT.choices.find(c => c.key === key);
+const weatherChoice = () => ({ key: "weather", title: "Outdoor air",
+  options: OPT.scenario.weathers.filter(w => w.available).map(w => ({ value: w.key, label: w.label })) });
+const choice = key => key === ORIENTATION.key ? ORIENTATION : key === "weather" ? weatherChoice() : OPT.choices.find(c => c.key === key);
 const labelOf = (key, value) => (choice(key)?.options.find(o => o.value === value) || {}).label ?? String(value);
-const isCut = h => { const hr = h % 24; return hr >= OPT.scenario.cut_start_hour && hr < OPT.scenario.cut_end_hour; };
+const isCut = h => !!result?.cut?.[h];
 const dayName = d => `${OPT.scenario.first_day + d} ${OPT.scenario.month}`;
-const hourName = h => `${dayName(Math.floor(h / 24))}, ${pad(h % 24)}:00`;
+const hourName = h => `${dayName(Math.floor(h / 24))} · ${pad(h % 24)}:00`;
 const signed = n => (n > 0 ? "+" : "") + n;
+const cutLabel = start => start === null || start === undefined ? "no power cut" : `power cut ${pad(start)}:00–${pad((start + 1) % 24)}:00`;
+const weatherOf = key => OPT.scenario.weathers.find(w => w.key === key) || OPT.scenario.weathers[0];
 
 // Small technical note under an option (from the physics the server reports)
 function optionNote(key, value) {
   const ph = OPT.physics || {};
-  if (key === "wall" && ph.walls?.[value]) return `U ${ph.walls[value].u_value} W/m²K`;
-  if (key === "roof" && ph.roofs?.[value]) return `U ${ph.roofs[value].u_value} W/m²K`;
+  if (key === "wall" && ph.walls?.[value]) return `U ${ph.walls[value].u_value}`;
+  if (key === "roof" && ph.roofs?.[value]) return `U ${ph.roofs[value].u_value}`;
   return "";
 }
 
 // ---------------------------------------------------------------------------
-// Toasts (Sonner-style: stack bottom-right, update in place, optional action)
+// Toasts (stack bottom-right, update in place, optional action)
 // ---------------------------------------------------------------------------
 const ICONS = {
   success: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`,
   error: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>`,
   loading: `<span class="spinner"></span>`,
 };
+const PLAY_ICON = `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>`;
+const PAUSE_ICON = `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>`;
 const toasts = new Map();   // id -> {el, timer, left, started}
 
 function toast(message, { id = String(Math.random()), type = "", detail = "", action = null, duration = 4000 } = {}) {
@@ -116,7 +130,6 @@ function dismiss(id) {
   t.el.classList.add("out");
   setTimeout(() => t.el.remove(), 220);
 }
-// Pause timers while the tab is hidden (Sonner does the same)
 document.addEventListener("visibilitychange", () => {
   for (const [id, t] of toasts) document.hidden ? pauseToast(t) : resumeToast(id, t);
 });
@@ -134,10 +147,7 @@ function enterApp(thenPickFile) {
     $("app").hidden = false;
     $("app").classList.add("entering");
     window.scrollTo(0, 0);
-    // The baseline may still be running from the intro: say so
-    if ($("run").disabled && !toasts.has("sim")) {
-      toast("Simulating the heatwave week", { id: "sim", type: "loading", detail: "EnergyPlus: your design and every single change" });
-    }
+    if (result) { renderStrip(); renderChart(); setHour(hour); }     // sized now that the workspace is visible
     if (thenPickFile) $("file").click();
   }, 200);
 }
@@ -148,7 +158,7 @@ function showIntro() {
 }
 
 // ---------------------------------------------------------------------------
-// Sidebar controls
+// Model panel controls
 // ---------------------------------------------------------------------------
 function controlHtml([key, kind]) {
   const c = choice(key);
@@ -175,20 +185,38 @@ function controlHtml([key, kind]) {
   return `<div class="control" data-key="${key}">${head}<div class="seg">${opts}</div></div>`;
 }
 
+function cutOptionsHtml() {
+  const hottest = result?.peaks?.normal?.typical_hour;
+  let html = `<option value="">No power cut</option>`;
+  for (let h = 0; h < 24; h++) {
+    const note = h === OPT.baseline.cut_start_hour ? " · evening load shedding" : h === hottest ? " · room's hottest hour" : "";
+    html += `<option value="${h}">${pad(h)}:00–${pad((h + 1) % 24)}:00${note}</option>`;
+  }
+  return html;
+}
+
 function buildForm() {
-  $("basics").innerHTML = BASICS.map(controlHtml).join("");
-  $("details").innerHTML = DETAILS.map(controlHtml).join("");
+  for (const [id, controls] of Object.entries(SECTIONS)) $(id).innerHTML = controls.map(controlHtml).join("");
+  $("ctl-scenario").innerHTML = `
+    ${controlHtml(["weather", "seg"])}
+    <p class="hint sm muted" id="weather-hint" style="margin:-4px 0 12px;line-height:1.45"></p>
+    <label class="control"><span class="control-label">Power cut (fans off)</span>
+      <select class="select" id="cut_start_hour">${cutOptionsHtml()}</select></label>
+    <p class="hint sm muted" style="margin-top:6px;line-height:1.45">Recorded heatwave, ${OPT.scenario.first_day}–${OPT.scenario.last_day} ${OPT.scenario.month} 2024, after ${OPT.scenario.spinup_days} warm-up days.</p>`;
 
   $("form").addEventListener("change", e => {
     const t = e.target, key = t.name;
-    if (key && t.type === "radio") state[key] = choice(key).options[+t.value].value;
-    if (key && t.type === "checkbox") state[key] = t.checked;
-    if (key && t.tagName === "SELECT") state[key] = choice(key).options[+t.value].value;
+    if (t.id === "cut_start_hour") state.cut_start_hour = t.value === "" ? null : +t.value;
+    else if (t.id === "party") return;
+    else if (key && t.type === "radio") state[key] = choice(key).options[+t.value].value;
+    else if (key && t.type === "checkbox") state[key] = t.checked;
+    else if (key && t.tagName === "SELECT") state[key] = choice(key).options[+t.value].value;
     readNumbers();
     syncForm();
   });
   $("form").addEventListener("input", e => { if (e.target.type === "number") { readNumbers(); syncForm(); } });
   $("form").addEventListener("submit", e => { e.preventDefault(); simulate(); });
+  $("form").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.type === "number") { e.preventDefault(); simulate(); } });
 }
 
 function readNumbers() {
@@ -203,7 +231,7 @@ function readNumbers() {
 
 // Push state into the controls and refresh locks, notes and the stale flag
 function syncForm() {
-  for (const [key] of [...BASICS, ...DETAILS]) {
+  for (const [key] of CONTROLS) {
     const c = choice(key);
     if (!c) continue;
     const i = c.options.findIndex(o => o.value === state[key]);
@@ -213,6 +241,10 @@ function syncForm() {
     const box = document.querySelector(`input[type=checkbox][name="${key}"]`);
     if (box) box.checked = !!state[key];
   }
+  $("cut_start_hour").value = state.cut_start_hour === null ? "" : String(state.cut_start_hour);
+  const w = weatherOf(state.weather);
+  $("weather-hint").innerHTML = `<span class="tagline ${w.source.toLowerCase()}">${esc(w.source)}</span>${esc(w.note)}`;
+
   const active = document.activeElement;
   for (const id of ["length_m", "width_m", "height_m"]) if (active !== $(id)) $(id).value = +state[id].toFixed(2);
   if (active !== $("wwr_pct")) $("wwr_pct").value = Math.round(state.wwr * 100);
@@ -233,15 +265,20 @@ function syncForm() {
 
   const area = model?.report?.inside_area_m2 ?? state.length_m * state.width_m;   // a plan: the rooms, not the outline
   $("area").textContent = `${area.toFixed(1)} m² · ${(area * state.height_m).toFixed(0)} m³`;
+  $("doc-name").textContent = model
+    ? `${model.report.file}${model.plan_id ? ` · ${model.report.rooms} rooms` : " · single room"}`
+    : `Single room · ${state.length_m.toFixed(1)} × ${state.width_m.toFixed(1)} × ${state.height_m.toFixed(1)} m`;
+  $("scenario").textContent = `${OPT.scenario.city} · ${OPT.scenario.first_day}–${OPT.scenario.last_day} ${OPT.scenario.month} 2024 · ${w.label.toLowerCase()} air · ${cutLabel(state.cut_start_hour)}`;
 
   const stale = result && JSON.stringify(payload()) !== ranFor;
   $("run").classList.toggle("stale", !!stale);
-  if (!$("run").disabled) $("run").textContent = stale ? "Update results" : "Run simulation";
+  if (!$("run").disabled) $("run-text").textContent = stale ? "Update results" : "Run simulation";
+  $("undo").disabled = trail.length < 2 || $("run").disabled;
 }
 
 function payload() {
   const keys = ["length_m", "width_m", "height_m", "orientation_deg", "floor", "wall", "roof",
-    "roof_solar_absorptance", "wwr", "shading_depth_m", "night_vent", "occupants"];
+    "roof_solar_absorptance", "wwr", "shading_depth_m", "night_vent", "occupants", "weather", "cut_start_hour"];
   const p = Object.fromEntries(keys.map(k => [k, state[k]]));
   if (model) Object.assign(p, model.geometry);   // dims, orientation and glass per wall
   if (model?.plan_id) { p.plan_id = model.plan_id; if (model.party) p.party_walls = model.party; }
@@ -250,9 +287,9 @@ function payload() {
 }
 
 // ---------------------------------------------------------------------------
-// Household: compact list in the sidebar, editor in a drawer
+// Household: compact list in the panel, editor in a drawer
 // ---------------------------------------------------------------------------
-const AGENT_COLORS = ["#c2410c", "#1d4ed8", "#15803d", "#7c3aed", "#b91c1c", "#0d9488"];
+const AGENT_COLORS = ["#c2410c", "#2563eb", "#15803d", "#7c3aed", "#b91c1c", "#0d9488"];
 const ROLES = { elderly: "Elderly, at home", homemaker: "Homemaker, cooks", worker: "Worker, away by day", child: "Child" };
 const adult = a => a.age >= (OPT.body_model?.min_age ?? 18);
 
@@ -269,7 +306,7 @@ function renderRoster() {
       <div class="roster-top">
         <span class="avatar" style="background:${AGENT_COLORS[i % AGENT_COLORS.length]}">${esc((a.name || "?")[0].toUpperCase())}</span>
         <input type="text" data-f="name" value="${esc(a.name)}" aria-label="Name">
-        ${roster.length > 1 ? `<button type="button" class="btn btn-ghost btn-icon" data-del="${i}" aria-label="Remove ${esc(a.name)}">
+        ${roster.length > 1 ? `<button type="button" class="tb-btn tb-icon" data-del="${i}" aria-label="Remove ${esc(a.name)}">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>` : ""}
       </div>
       <div class="roster-grid">
@@ -308,7 +345,7 @@ function bindHousehold() {
     renderRoster();
     $("roster").lastElementChild?.querySelector("input")?.focus();
   });
-  $("edit-household").addEventListener("click", openSheet);
+  $("edit-household").addEventListener("click", e => { e.preventDefault(); openSheet(); });
   $("sheet-close").addEventListener("click", () => closeSheet(false));
   $("overlay").addEventListener("click", () => closeSheet(false));
   $("sheet-done").addEventListener("click", () => closeSheet(true));
@@ -352,7 +389,7 @@ function setModel(data, quiet) {
     <div class="model-head"><span>${esc(r.file)}</span><button type="button" class="link" id="unload">Remove</button></div>
     <span class="muted">${esc(r.size)}</span>
     <span class="muted">Glass: ${esc(glass)} (${r.window_to_wall_pct} % of walls)</span>
-    ${data.plan_id ? `<span class="muted">Simulated room by room · results in the 3D tab</span>
+    ${data.plan_id ? `<span class="muted">Simulated room by room (one zone per room, AirflowNetwork)</span>
     <label class="control"><span class="control-label">Shared walls</span>
       <select class="select" id="party">
         <option value="">As drawn (none marked = all face outside)</option>
@@ -360,8 +397,7 @@ function setModel(data, quiet) {
       </select></label>` : ""}
     ${(r.warnings || []).map(w => `<span class="warn">${esc(w)}</span>`).join("")}`;
   $("model").hidden = false;
-  $("drop").hidden = true;
-  $("unload").onclick = () => { clearModel(); syncForm(); };
+  $("unload").onclick = () => { clearModel(); pendingLabel = "Back to the single room"; syncForm(); simulate(); };
   if (data.plan_id) {
     $("party").value = data.party || "";
     $("party").onchange = e => { model = { ...model, party: e.target.value || null }; syncForm(); };
@@ -369,11 +405,11 @@ function setModel(data, quiet) {
   if (quiet) return;
   pendingLabel = `Imported ${r.file}`;
   toast(`Imported ${r.file}`, { type: "success", detail: data.plan_id
-    ? `${r.rooms} rooms: simulated room by room, shown in the 3D tab.` : "Room size and windows now come from the model." });
+    ? `${r.rooms} rooms: simulated room by room.` : "Room size and windows now come from the model." });
   syncForm();
   simulate();
 }
-function clearModel() { model = null; $("model").hidden = true; $("drop").hidden = false; }
+function clearModel() { model = null; $("model").hidden = true; }
 
 async function loadRhino(promise) {
   try { setModel(await promise); }
@@ -386,24 +422,33 @@ function upload(file) {
 }
 
 function bindRhino() {
-  const drop = $("drop");
   $("pick").addEventListener("click", () => $("file").click());
   $("file").addEventListener("change", e => { if (e.target.files[0]) upload(e.target.files[0]); e.target.value = ""; });
-  // Drag a .3dm anywhere onto the sidebar
-  const side = document.querySelector(".side");
-  side.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
-  side.addEventListener("dragleave", e => { if (!side.contains(e.relatedTarget)) drop.classList.remove("over"); });
-  side.addEventListener("drop", e => {
-    e.preventDefault(); drop.classList.remove("over");
+  // Drag a .3dm anywhere onto the workspace
+  const app = $("app"), left = document.querySelector(".panel.left");
+  app.addEventListener("dragover", e => { e.preventDefault(); left.classList.add("over"); });
+  app.addEventListener("dragleave", e => { if (!app.contains(e.relatedTarget)) left.classList.remove("over"); });
+  app.addEventListener("drop", e => {
+    e.preventDefault(); left.classList.remove("over");
     if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]);
   });
+
+  const menu = $("samples"), btn = $("samples-btn");
+  const close = () => { menu.hidden = true; btn.setAttribute("aria-expanded", "false"); };
+  btn.addEventListener("click", e => { e.stopPropagation(); menu.hidden = !menu.hidden; btn.setAttribute("aria-expanded", String(!menu.hidden)); });
+  document.addEventListener("click", close);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
   api("/api/samples").then(list => {
-    if (!list.length) { $("samples").hidden = true; return; }
-    $("samples").innerHTML = "or use a sample: " + list.map(s =>
-      `<button type="button" class="link" data-sample="${esc(s.id)}">${esc(s.name)}</button>`).join(" · ");
-    $("samples").querySelectorAll("[data-sample]").forEach(b => b.addEventListener("click", () =>
-      loadRhino(api(`/api/rhino/sample?name=${encodeURIComponent(b.dataset.sample)}`, { method: "POST" }))));
-  }).catch(() => { $("samples").hidden = true; });
+    menu.innerHTML = `<button type="button" data-sample="">Single room (default)</button>` + list.map(s =>
+      `<button type="button" data-sample="${esc(s.id)}">${esc(s.name)}</button>`).join("");
+    menu.querySelectorAll("[data-sample]").forEach(b => b.addEventListener("click", () => {
+      if (b.dataset.sample) return loadRhino(api(`/api/rhino/sample?name=${encodeURIComponent(b.dataset.sample)}`, { method: "POST" }));
+      clearModel();
+      Object.assign(state, { length_m: OPT.baseline.length_m, width_m: OPT.baseline.width_m, height_m: OPT.baseline.height_m, orientation_deg: 0 });
+      pendingLabel = "Single room (default)";
+      syncForm(); simulate();
+    }));
+  }).catch(() => { $("samples-menu").hidden = true; });
 }
 
 // ---------------------------------------------------------------------------
@@ -416,11 +461,14 @@ async function simulate() {
   const before = result?.summary.safe_hours;
   status("Simulating", "busy");
   const onIntro = !$("intro").hidden;      // no toasts over the intro page
-  if (!onIntro) toast("Simulating the heatwave week", { id: "sim", type: "loading", detail: "EnergyPlus: your design and every single change" });
+  if (!onIntro && result) toast("Simulating the heatwave week", { id: "sim", type: "loading", detail: "EnergyPlus: your design and every single change" });
   $("run").disabled = true;
-  $("run").textContent = "Simulating…";
+  $("run-text").textContent = "Simulating…";
+  $("undo").disabled = true;
+  $("center").classList.add("busy");
   $("result").classList.add("dim");
   $("error").hidden = true;
+  if (playTimer) togglePlay();
 
   try {
     const res = await api("/api/assess", { method: "POST", headers: { "Content-Type": "application/json" }, body: text });
@@ -434,8 +482,9 @@ async function simulate() {
     render();
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
     status("Ready", "ok");
+    $("sb-time").textContent = `last run ${secs} s`;
     const d = before === undefined ? null : res.summary.safe_hours - before;
-    if (!onIntro || toasts.has("sim")) toast(`${res.summary.safe_hours} of 168 hours safe`, {
+    if (toasts.has("sim")) toast(`${res.summary.safe_hours} of 168 hours safe`, {
       id: "sim", type: "success",
       detail: (d === null ? label : `${label} · ${signed(d)} h`) + ` · ${secs} s`,
       action: trail.length > 1 ? { label: "Undo", onClick: undo } : null,
@@ -450,6 +499,7 @@ async function simulate() {
   } finally {
     if (no === requestNo) {
       $("run").disabled = false;
+      $("center").classList.remove("busy");
       $("result").classList.remove("dim");
       syncForm();
     }
@@ -459,6 +509,7 @@ async function simulate() {
 function applyChange(c) {
   state[c.parameter] = c.value;
   pendingLabel = `${c.title}: ${c.label}`;
+  if (preview && preview.parameter === c.parameter) preview = null;
   syncForm();
   simulate();
 }
@@ -492,42 +543,49 @@ function bindTabs() {
 function setTab(name) {
   tab = name;
   document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
-  if (!result) return;
   document.querySelectorAll(".tabpanel").forEach(p => { p.hidden = p.dataset.panel !== name; });
-  if (name === "week") { renderWeek(); renderChart(); }
-  if (name === "body") { renderAgentChart(); }
+  if (!result) return;
+  if (name === "people") { renderAgentCards(hour); renderAgentChart(); }
   setHour(hour);
 }
 
 // ---------------------------------------------------------------------------
 // Rendering
 // ---------------------------------------------------------------------------
-let shownPlan = null;     // plan_id shown in the 3D tab
-
-function render3d() {
-  const unit = result.unit;
-  $("tab-flat").hidden = !unit;
-  $("method-model").textContent = unit
-    ? "Room-by-room EnergyPlus 26.2 model (one zone per room, AirflowNetwork); results are where the people are: the living room by day, the hottest bedroom at night"
-    : "Single-zone EnergyPlus 26.2 model";
-  document.querySelector(".body-grid .room").hidden = !!unit;     // the 3D tab shows the rooms
-  if (!unit) { if (tab === "flat") tab = "overview"; shownPlan = null; return; }
-  const plan = JSON.parse(ranFor).plan_id, first = plan !== shownPlan;
-  shownPlan = plan;
-  if (first) tab = "flat";                                          // a new plan opens on the 3D tab
-  const draw = () => window.OASIS3D.show(unit, { keepView: !first, name: model?.report?.file });
-  if (window.OASIS3D) draw(); else window.addEventListener("oasis3d-ready", draw, { once: true });
+// The hour the workspace opens on: the hottest power-cut hour, or the hottest hour
+function pickHour() {
+  const hi = result.heat_index, cut = result.cut;
+  let best = -1;
+  for (let h = 0; h < HOURS; h++) if (cut[h] && (best < 0 || hi[h] > hi[best])) best = h;
+  if (best < 0) best = hi.indexOf(Math.max(...hi));
+  return best;
 }
 
 function render() {
   $("loading").hidden = true;
-  render3d();
-  renderVerdict();
-  renderChanges();
+  const p = JSON.parse(ranFor);
+  const key = JSON.stringify([p.plan_id || "box", p.weather, p.cut_start_hour]);
+  const fresh = key !== hourFor;                    // a new model or scenario: jump to its critical hour
+  if (fresh) { hour = pickHour(); hourFor = key; }
+  const draw = () => window.OASIS3D.show(result.unit, { keepView: true, hour });
+  if (window.OASIS3D) draw(); else window.addEventListener("oasis3d-ready", draw, { once: true });
+
+  $("cut_start_hour").innerHTML = cutOptionsHtml();
+  $("sb-engine").textContent = result.unit.single_room
+    ? "EnergyPlus 26.2 · single zone · AirflowNetwork"
+    : `EnergyPlus 26.2 · ${Object.keys(result.unit.geometry.rooms).length} zones · AirflowNetwork`;
+  $("sb-weather").textContent = `Weather: ${weatherOf(result.scenario.weather).label.toLowerCase()}, ${weatherOf(result.scenario.weather).source.toLowerCase()}`;
+
+  renderScore();
+  renderWeek();
   renderPeaks();
   renderTrail();
+  renderChanges();
   renderCompare();
   renderCheck();
+  renderBasis();
+  renderStrip();
+  renderChart();
   setTab(tab);
 }
 
@@ -541,52 +599,36 @@ function cellColour(hi) {
   return `color-mix(in oklab, var(--heat-deep) ${Math.round(t * 100)}%, var(--heat))`;
 }
 
-function renderVerdict() {
+function renderScore() {
   const s = result.summary, lim = limit();
   $("score").textContent = s.safe_hours;
+  const R = 27, C = 2 * Math.PI * R;
+  $("gauge").innerHTML = `<svg viewBox="0 0 64 64" width="64" height="64">
+    <circle class="track" cx="32" cy="32" r="${R}" fill="none" stroke-width="7"/>
+    <circle class="arc" cx="32" cy="32" r="${R}" fill="none" stroke-width="7" stroke-linecap="butt"
+      stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - s.safe_hours / HOURS)).toFixed(1)}" transform="rotate(-90 32 32)"/>
+    <text x="32" y="36" text-anchor="middle" font-size="12" font-weight="600" fill="currentColor" font-family="var(--mono)">${Math.round(s.safe_hours / HOURS * 100)}%</text></svg>`;
   const days = Math.round(s.danger_hours / 24 * 10) / 10;
   const first = trail[0]?.safe;
   const delta = trail.length > 1 ? s.safe_hours - first : null;
   const deltaHtml = delta === null ? "" : `<span class="delta ${delta >= 0 ? "up" : "down"}">${signed(delta)} h vs start</span>`;
   $("verdict").innerHTML = s.danger_hours === 0
-    ? `The flat stays below ${lim} °C felt heat all week.${deltaHtml}`
-    : `People here spend <b>${s.danger_hours} hours</b> (about ${days} days) above ${lim} °C felt heat this week.${deltaHtml}`;
+    ? `Below ${lim} °C felt heat all week.${deltaHtml}`
+    : `<b>${s.danger_hours} h</b> (about ${days} days) above ${lim} °C felt heat.${deltaHtml}`;
 
-  $("meter").innerHTML = result.heat_index.map(v => `<i style="background:${v >= lim ? "var(--heat)" : "var(--safe-warm)"}"></i>`).join("");
-
-  const cutTotal = HOURS / 24 * (OPT.scenario.cut_end_hour - OPT.scenario.cut_start_hour);
+  const cutTotal = result.cut.filter(Boolean).length;
   const p = result.peaks;
+  const cutStat = cutTotal
+    ? `<div class="stat"><span>Power-cut hours in danger</span><b>${s.cut_hours_in_danger}<small> of ${cutTotal}</small></b><em>${pad(p.cut.start_hour)}:00–${pad(p.cut.end_hour % 24)}:00, fan off</em></div>`
+    : `<div class="stat"><span>Power cut</span><b>none</b><em>fans run every hour</em></div>`;
+  const ext = s.safe_hours_extended_hi;
   $("stats").innerHTML = `
     <div class="stat"><span>Hours in danger</span><b>${s.danger_hours}<small> h</small></b><em>felt heat ≥ ${lim} °C</em></div>
-    <div class="stat"><span>Power-cut hours in danger</span><b>${s.cut_hours_in_danger}<small> of ${cutTotal}</small></b><em>${pad(OPT.scenario.cut_start_hour)}:00–${pad(OPT.scenario.cut_end_hour)}:00, fan off</em></div>
-    <div class="stat"><span>Peak felt heat</span><b>${s.max_heat_index_c}<small> °C</small></b><em>${p ? `around ${pad(p.normal.typical_hour)}:00` : "heat index"}</em></div>
-    <div class="stat"><span>Peak indoor air</span><b>${s.max_indoor_temp_c}<small> °C</small></b><em>mean ${s.mean_indoor_temp_c} °C</em></div>`;
-}
-
-function renderChanges() {
-  const list = result.changes;
-  if (!list.length) {
-    $("changes").innerHTML = `<li class="none">No single changes left to test for this design.</li>`;
-    $("show-all").hidden = true;
-    return;
-  }
-  const maxGain = Math.max(1, ...list.map(c => Math.abs(c.safe_hours_gained)));
-  const helpful = list.filter(c => c.safe_hours_gained > 0).length;
-  const shown = showAll ? list : list.slice(0, Math.max(1, Math.min(TOP_CHANGES, helpful || 1)));
-  $("changes").innerHTML = shown.map((c, i) => {
-    const g = c.safe_hours_gained;
-    return `<li class="change">
-      <span class="rank">${pad(i + 1)}</span>
-      <span class="what">${esc(c.title)}: ${esc(c.label)}${i === 0 && g > 0 && !showAll ? `<span class="best">Best</span>` : ""}<small>now ${esc(labelOf(c.parameter, state[c.parameter]))} · ${c.safe_hours} safe h · peak ${c.max_heat_index_c} °C</small></span>
-      <span class="bar${g < 0 ? " neg" : ""}"><i style="width:${(Math.abs(g) / maxGain * 100).toFixed(1)}%"></i></span>
-      <span class="gain ${g > 0 ? "up" : g < 0 ? "down" : "muted"}">${signed(g)} h</span>
-      <button type="button" class="btn btn-outline btn-sm" data-i="${list.indexOf(c)}">Apply</button>
-    </li>`;
-  }).join("");
-  $("changes").querySelectorAll("[data-i]").forEach(b => b.addEventListener("click", () => applyChange(list[+b.dataset.i])));
-  const hidden = list.length - shown.length;
-  $("show-all").hidden = !showAll && hidden === 0;
-  $("show-all").textContent = showAll ? "Show fewer" : `Show all ${list.length} changes (${hidden} more)`;
+    ${cutStat}
+    <div class="stat"><span>Peak felt heat</span><b>${s.max_heat_index_c}<small> °C</small></b><em>${p ? `room hottest around ${pad(p.normal.typical_hour)}:00` : "heat index"}</em></div>
+    <div class="stat"><span>Peak indoor air</span><b>${s.max_indoor_temp_c}<small> °C</small></b><em>mean ${s.mean_indoor_temp_c} °C</em></div>
+    <div class="stat"><span>Heat over the limit</span><b>${Math.round(s.degree_hours_over_limit)}<small> °C·h</small></b><em>degree-hours above ${lim} °C</em></div>
+    <div class="stat"><span>Cross-check</span><b>${ext ?? "–"}<small> h safe</small></b><em>extended heat index</em></div>`;
 }
 
 // Two peaks: the normal daily peak, and the peak during the power cut.
@@ -594,16 +636,16 @@ function renderChanges() {
 function renderPeaks() {
   const p = result.peaks;
   if (!p) return;
-  const lim = limit(), n = p.normal, c = p.cut, w = p.by_hour[p.worst_cut_hour];
+  const lim = limit(), n = p.normal, c = p.cut, w = p.by_hour[p.worst_cut_hour], days = p.days;
   $("peaks").innerHTML = `
-    <div class="peak"><span>Normal peak (fan on)</span><b>${pad(n.typical_hour)}:00 · ${n.max_heat_index_c} °C</b><em>felt; air up to ${n.max_indoor_temp_c} °C</em></div>
-    <div class="peak"><span>During the ${pad(c.start_hour)}:00 cut</span><b>${c.max_heat_index_c} °C felt</b><em>above ${lim} °C on ${c.nights_in_danger} of ${c.days} nights</em></div>
-    <div class="peak"><span>Worst hour for a cut</span><b>${pad(w.hour)}:00 · ${w.max_heat_index_no_fan_c} °C</b><em>above the limit on ${w.days_in_danger} of ${c.days} days</em></div>`;
+    <div class="peak"><span>Normal peak, fan on</span><b>${pad(n.typical_hour)}:00 · ${n.max_heat_index_c} °C</b><em>felt heat; air up to ${n.max_indoor_temp_c} °C</em></div>
+    ${c ? `<div class="peak"><span>During the ${pad(c.start_hour)}:00 cut</span><b>${c.max_heat_index_c} °C</b><em>above ${lim} °C on ${c.nights_in_danger} of ${c.days} days</em></div>` : ""}
+    <div class="peak"><span>Worst hour for a cut</span><b>${pad(w.hour)}:00 · ${w.max_heat_index_no_fan_c} °C</b><em>above the limit on ${w.days_in_danger} of ${days} days</em></div>`;
   const hiMin = 30, hiMax = Math.max(...p.by_hour.map(r => r.max_heat_index_no_fan_c), lim + 5);
   $("cutscan").innerHTML = p.by_hour.map(r => {
     const hgt = Math.max(4, Math.round(100 * (r.max_heat_index_no_fan_c - hiMin) / (hiMax - hiMin)));
-    const cut = r.hour >= c.start_hour && r.hour < c.end_hour;
-    return `<div class="cs-col${cut ? " cut" : ""}" title="${pad(r.hour)}:00 · fan off: up to ${r.max_heat_index_no_fan_c} °C felt · ${r.days_in_danger}/${c.days} days above ${lim} °C">
+    const cut = c && r.hour >= c.start_hour && r.hour < c.end_hour;
+    return `<div class="cs-col${cut ? " cut" : ""}${r.hour === n.typical_hour ? " peak-h" : ""}" title="${pad(r.hour)}:00 · fan off: up to ${r.max_heat_index_no_fan_c} °C felt · ${r.days_in_danger}/${days} days above ${lim} °C">
       <span class="cs-n">${r.days_in_danger || ""}</span>
       <span class="cs-bar" style="height:${hgt}%;background:${cellColour(r.max_heat_index_no_fan_c)}"></span>
       <span class="cs-h">${r.hour === n.typical_hour ? "▲" : ""}${pad(r.hour)}</span>
@@ -616,11 +658,46 @@ function renderTrail() {
   $("trail").innerHTML = trail.map((t, i) => {
     const d = i ? t.safe - trail[i - 1].safe : null;
     const ds = d === null ? "" : ` <span class="${d >= 0 ? "up" : "down"}">(${signed(d)})</span>`;
-    return `<li><span>${esc(t.label)}</span><span class="h">${t.safe} h${ds}</span></li>`;
+    return `<li><span>${esc(t.label)}</span><span class="h2">${t.safe} h${ds}</span></li>`;
   }).join("");
 }
 
-// ----- Hour by hour --------------------------------------------------------
+// ----- Interventions -------------------------------------------------------
+function renderChanges() {
+  const list = result.changes;
+  if (!list.length) {
+    $("changes").innerHTML = `<li class="none">No single changes left to test for this design.</li>`;
+    $("show-all").hidden = true;
+    return;
+  }
+  const maxGain = Math.max(1, ...list.map(c => Math.abs(c.safe_hours_gained)));
+  const helpful = list.filter(c => c.safe_hours_gained > 0).length;
+  const shown = showAll ? list : list.slice(0, Math.max(1, Math.min(TOP_CHANGES, helpful || 1)));
+  $("changes").innerHTML = shown.map((c, i) => {
+    const g = c.safe_hours_gained;
+    return `<li class="change${preview === c ? " on" : ""}" data-i="${list.indexOf(c)}" title="Click to compare in the timeline">
+      <span class="what">${esc(c.title)}: ${esc(c.label)}${i === 0 && g > 0 ? `<span class="best">Best</span>` : ""}<small>now ${esc(labelOf(c.parameter, state[c.parameter]))} · ${c.safe_hours} safe h · peak ${c.max_heat_index_c} °C</small></span>
+      <span class="gain ${g > 0 ? "up" : g < 0 ? "down" : "muted"}">${signed(g)} h</span>
+      <span class="bar${g < 0 ? " neg" : ""}"><i style="width:${(Math.abs(g) / maxGain * 100).toFixed(1)}%"></i></span>
+      <button type="button" class="btn btn-outline btn-sm" data-apply="${list.indexOf(c)}">Apply</button>
+    </li>`;
+  }).join("");
+  $("changes").querySelectorAll("[data-apply]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); applyChange(list[+b.dataset.apply]); }));
+  $("changes").querySelectorAll(".change").forEach(li => li.addEventListener("click", () => {
+    const c = list[+li.dataset.i];
+    setPreview(preview === c ? null : c);
+  }));
+  const hidden = list.length - shown.length;
+  $("show-all").hidden = !showAll && hidden === 0;
+  $("show-all").textContent = showAll ? "Show fewer" : `Show all ${list.length} changes (${hidden} more)`;
+}
+
+function setPreview(c) {
+  preview = c;
+  $("compare").value = c ? String(result.changes.indexOf(c)) : "";
+  renderChanges(); renderWeek(); renderChart(); setHour(hour);
+}
+
 function renderCompare() {
   const sel = $("compare");
   sel.innerHTML = `<option value="">No change</option>` + result.changes.map((c, i) =>
@@ -628,6 +705,7 @@ function renderCompare() {
   sel.value = preview ? String(result.changes.indexOf(preview)) : "";
 }
 
+// ----- Week grid (Summary) -------------------------------------------------
 function renderWeek() {
   const week = $("week");
   if (!week.dataset.built) {
@@ -635,65 +713,91 @@ function renderWeek() {
     for (let h = 0; h < 24; h++) html += `<span class="hr">${pad(h)}</span>`;
     for (let d = 0; d < 7; d++) {
       html += `<span class="day">${dayName(d)}</span>`;
-      for (let h = 0; h < 24; h++) {
-        const i = d * 24 + h;
-        html += `<span class="cell${isCut(i) ? " cut" : ""}" data-h="${i}"></span>`;
-      }
+      for (let h = 0; h < 24; h++) html += `<span class="cell" data-h="${d * 24 + h}"></span>`;
     }
     week.innerHTML = html;
     week.dataset.built = "1";
-    week.addEventListener("mouseover", e => { if (e.target.dataset.h) setHour(+e.target.dataset.h); });
+    const pick = e => { if (e.target.dataset.h && (e.type === "click" || e.buttons === 1)) setHour(+e.target.dataset.h); };
+    week.addEventListener("click", pick);
+    week.addEventListener("mouseover", pick);
   }
   const lim = limit();
   const series = preview ? preview.heat_index : result.heat_index;
   week.querySelectorAll(".cell").forEach(cell => {
     const i = +cell.dataset.h;
     cell.style.background = cellColour(series[i]);
+    cell.classList.toggle("cut", isCut(i));
+    cell.title = `${hourName(i)} · felt ${series[i]} °C`;
     // A dot marks hours the compared change turns from danger to safe
     cell.classList.toggle("flip", !!preview && result.heat_index[i] >= lim && series[i] < lim);
   });
 }
 
-// Shared SVG frame for the two week-long line charts
+// ----- Timeline dock: heat strip + chart -----------------------------------
+const CHART = { L: 38, R: 64 };      // plot margins in px; the strip uses the same (style.css .strip)
+
+function renderStrip() {
+  const strip = $("strip");
+  const series = preview ? preview.heat_index : result.heat_index;
+  strip.innerHTML = series.map((v, h) =>
+    `<i class="${isCut(h) ? "cut" : ""}${h % 24 === 0 && h ? " day" : ""}" style="background:${cellColour(v)}"></i>`).join("");
+}
+
+function bindStrip() {
+  const strip = $("strip");
+  const at = e => {
+    const r = strip.getBoundingClientRect();
+    setHour(Math.max(0, Math.min(HOURS - 1, Math.floor((e.clientX - r.left) / r.width * HOURS))));
+  };
+  strip.addEventListener("pointerdown", e => { strip.setPointerCapture(e.pointerId); at(e); });
+  strip.addEventListener("pointermove", e => { if (e.buttons === 1) at(e); });
+  strip.addEventListener("keydown", e => {
+    const step = { ArrowLeft: -1, ArrowRight: 1, PageUp: -24, PageDown: 24 }[e.key];
+    if (step) { e.preventDefault(); setHour((hour + step + HOURS) % HOURS); }
+  });
+}
+
+// Shared SVG frame for the week-long line charts (W in real pixels)
 function weekFrame(W, H, L, R, T, B, lo, top) {
   const x = h => L + (h + 0.5) / HOURS * (W - L - R);
   const y = v => T + (top - Math.max(lo, Math.min(top, v))) / (top - lo) * (H - T - B);
   const path = s => s.map((v, h) => `${h ? "L" : "M"}${x(h).toFixed(1)},${y(v).toFixed(1)}`).join("");
   let g = "";
+  const cw = (W - L - R) / HOURS;
+  for (let h = 0; h < HOURS; h++) if (isCut(h)) g += `<rect class="cutband" x="${x(h) - cw / 2}" y="${T}" width="${Math.max(cw, 1.5)}" height="${H - T - B}"/>`;
   for (let d = 0; d < 7; d++) {
-    for (let h = OPT.scenario.cut_start_hour; h < OPT.scenario.cut_end_hour; h++) {
-      const i = d * 24 + h;
-      g += `<rect class="cutband" x="${x(i) - (W - L - R) / HOURS / 2}" y="${T}" width="${(W - L - R) / HOURS}" height="${H - T - B}"/>`;
-    }
     const xd = L + d * 24 / HOURS * (W - L - R);
     g += `<line class="grid" x1="${xd}" x2="${xd}" y1="${T}" y2="${H - B}"/>`;
-    g += `<text x="${xd + 4}" y="${H - 6}">${dayName(d)}</text>`;
+    g += `<text x="${xd + 4}" y="${H - 6}">${W - L - R > 420 ? dayName(d) : OPT.scenario.first_day + d}</text>`;
   }
   return { x, y, path, g };
 }
 
-function bindHover(wrap, hitId, L, plotW) {
-  const svg = wrap.querySelector("svg");
+function bindDrag(wrap, hitId, L, plotW) {
+  const svg = wrap.querySelector("svg"), hit = $(hitId);
   svg.dataset.l = L; svg.dataset.w = plotW;
-  $(hitId).addEventListener("mousemove", e => {
-    const pt = svg.createSVGPoint();
-    pt.x = e.clientX; pt.y = e.clientY;
-    const px = pt.matrixTransform(svg.getScreenCTM().inverse()).x;
-    setHour(Math.max(0, Math.min(HOURS - 1, Math.floor((px - L) / plotW * HOURS))));
-  });
+  const at = e => {
+    const r = svg.getBoundingClientRect();
+    setHour(Math.max(0, Math.min(HOURS - 1, Math.floor((e.clientX - r.left - L) / plotW * HOURS))));
+  };
+  hit.style.cursor = "ew-resize";
+  hit.addEventListener("pointerdown", e => { hit.setPointerCapture(e.pointerId); at(e); });
+  hit.addEventListener("pointermove", e => { if (e.buttons === 1) at(e); });
 }
 
-function keyRow(items, L) {
+function keyRow(items, L, y = 10) {
   let kx = L;
   return items.map(([attrs, txt]) => {
-    const s = `<g class="key"><line ${attrs} x1="${kx}" x2="${kx + 18}" y1="-4" y2="-4"/><text x="${kx + 24}" y="0">${esc(txt)}</text></g>`;
-    kx += 40 + txt.length * 6.4;
+    const s = `<g class="key"><line ${attrs} x1="${kx}" x2="${kx + 16}" y1="${y - 4}" y2="${y - 4}"/><text x="${kx + 21}" y="${y}">${esc(txt)}</text></g>`;
+    kx += 36 + txt.length * 5.9;
     return s;
   }).join("");
 }
 
 function renderChart() {
-  const W = 1000, H = 250, L = 38, R = 64, T = 12, B = 24;
+  const W = Math.floor($("chart").clientWidth);
+  if (!W || !result) return;
+  const H = 132, { L, R } = CHART, T = 20, B = 20;
   const hi = result.heat_index, out = result.outdoor_temp, alt = preview?.heat_index;
   const all = hi.concat(out, alt || [], [limit()]);
   const lo = Math.floor(Math.min(...all) / 5) * 5, top = Math.ceil(Math.max(...all) / 5) * 5;
@@ -704,29 +808,31 @@ function renderChart() {
     g += `<text x="${L - 6}" y="${f.y(v) + 4}" text-anchor="end">${v}</text>`;
   }
   g += `<line class="limit" x1="${L}" x2="${W - R}" y1="${f.y(limit())}" y2="${f.y(limit())}"/>`;
-  g += `<text class="limit-label" x="${W - R + 6}" y="${f.y(limit()) + 4}">${limit()} °C</text>`;
+  g += `<text class="limit-label" x="${W - R + 6}" y="${f.y(limit()) + 4}">${limit()} °C limit</text>`;
   g += `<path class="out" d="${f.path(out)}"/><path class="hi" d="${f.path(hi)}"/>`;
   if (alt) g += `<path class="alt" d="${f.path(alt)}"/>`;
   g += `<line class="cursor" id="cursor" x1="0" x2="0" y1="${T}" y2="${H - B}" visibility="hidden"/>`;
   g += `<rect id="hit" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent"/>`;
-  const keys = [[`class="hi"`, "felt heat, this design"], [`class="out"`, "outdoor air"]];
+  const keys = [[`class="hi"`, "felt heat indoors (°C)"], [`class="out"`, "outdoor air"]];
   if (alt) keys.splice(1, 0, [`class="alt"`, `with ${preview.label.toLowerCase()}`]);
-  $("chart").innerHTML = `<svg viewBox="0 -14 ${W} ${H + 14}" role="img" aria-label="Felt heat through the week against the ${limit()} °C limit">${keyRow(keys, L)}${g}</svg>`;
-  bindHover($("chart"), "hit", L, W - L - R);
+  $("chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Felt heat through the week against the ${limit()} °C limit">${keyRow(keys, L)}${g}</svg>`;
+  bindDrag($("chart"), "hit", L, W - L - R);
 }
 
-// Linked hover: one hour in the readout, the grid, the chart cursors and the room
+// One current hour everywhere: readout, strip, week grid, chart cursors, people, 3D
 function setHour(h) {
   hour = h;
   if (!result) return;
   const lim = limit(), v = result.heat_index[h];
-  let txt = `<b>${hourName(h)}</b>${isCut(h) ? " · power cut" : ""} · felt <span class="${v >= lim ? "hot-v" : ""}">${v} °C</span>`
+  let txt = `<b>${hourName(h)}</b>${isCut(h) ? `<span class="chip">POWER CUT</span>` : " · "}felt <span class="${v >= lim ? "hot-v" : ""}">${v} °C</span>`
     + ` · air ${result.indoor_temp[h]} °C · RH ${result.humidity[h]} % · outdoor ${result.outdoor_temp[h]} °C`;
   if (preview) txt += ` · with change <span class="${preview.heat_index[h] >= lim ? "hot-v" : ""}">${preview.heat_index[h]} °C</span>`;
   $("readout").innerHTML = txt;
-  $("hour-slider").value = h;
-  $("scrubber-time").textContent = hourName(h);
+  $("strip").setAttribute("aria-valuenow", h);
+  $("strip").setAttribute("aria-valuetext", hourName(h));
 
+  $("strip").querySelector("i.on")?.classList.remove("on");
+  $("strip").children[h]?.classList.add("on");
   document.querySelectorAll(".week .cell.on").forEach(c => c.classList.remove("on"));
   document.querySelector(`.week .cell[data-h="${h}"]`)?.classList.add("on");
   for (const [chartId, curId] of [["chart", "cursor"], ["agent-chart", "agent-cursor"]]) {
@@ -735,11 +841,17 @@ function setHour(h) {
     const cx = +svg.dataset.l + (h + 0.5) / HOURS * +svg.dataset.w;
     cur.setAttribute("x1", cx); cur.setAttribute("x2", cx); cur.setAttribute("visibility", "visible");
   }
-  if (tab === "body") { renderRoomStage(h); renderAgentCards(h); }
+  if (tab === "people") renderAgentCards(h);
+  window.OASIS3D?.setHour(h);
 }
 
-// ----- Household check (JOS-3) ---------------------------------------------
-const STATUS_COLOR = { safe: "#15803d", caution: "#d97706", danger: "#ea580c", critical: "#dc2626", away: "#71717a" };
+function togglePlay() {
+  if (playTimer) { clearInterval(playTimer); playTimer = null; $("play").innerHTML = PLAY_ICON; $("play").setAttribute("aria-label", "Play"); return; }
+  $("play").innerHTML = PAUSE_ICON; $("play").setAttribute("aria-label", "Pause");
+  playTimer = setInterval(() => setHour((hour + 1) % HOURS), 450);
+}
+
+// ----- People (JOS-3) ------------------------------------------------------
 const BODY = () => OPT.body_model || { core_caution_c: 37.5, core_limit_c: 38.0, core_critical_c: 38.5, v_under_fan: 0.8, v_still: 0.1, min_age: 18 };
 
 function activeAgent() {
@@ -747,143 +859,18 @@ function activeAgent() {
   if (!a[activeIdx]?.modelled) activeIdx = Math.max(0, a.findIndex(x => x.modelled));
   return a[activeIdx]?.modelled ? a[activeIdx] : null;
 }
-function selectAgent(i) { activeIdx = i; renderRoomStage(hour); renderAgentCards(hour); renderAgentChart(); setHour(hour); }
+function selectAgent(i, fromViewer) {
+  activeIdx = i;
+  renderAgentCards(hour); renderAgentChart(); setHour(hour);
+  if (!fromViewer) window.OASIS3D?.focus(result.agents[i]?.id ?? null);
+}
 
 function renderCheck() {
   const c = result.check;
   if (!c) { $("check").textContent = "No adults in the household, so the body check did not run."; return; }
   $("check").innerHTML = `Everyone modelled stays below ${c.core_limit_c.toFixed(1)} °C core in <b>${c.household_safe_hours}</b> of 168 h.
-    It agrees with the heat index in ${c.hours_agree} h; in ${c.hi_safe_but_body_over_limit} h the heat index says safe while someone
+    The body model agrees with the heat index in ${c.hours_agree} h; in ${c.hi_safe_but_body_over_limit} h the heat index says safe while someone
     is over the limit (most affected: ${esc(c.most_affected)}).`;
-}
-
-// ----- Room plan, to scale -------------------------------------------------
-// Drawn in the room's own frame, as in oasis/build_idf.py: length_m along x,
-// width_m along y, the model's "north" wall at the top. The drawing is then
-// rotated by orientation_deg, so true north is always up on screen.
-const FACING = { north: 0, east: 90, south: 180, west: 270 };
-const compassName = deg => ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round((((deg % 360) + 360) % 360) / 45) % 8];
-
-// Glass per wall: the same rule as build_idf.py:window_sizes (one centred
-// window per wall, keeping the wall's proportions).
-function windowWidths(p) {
-  const wall = { north: p.length_m, south: p.length_m, east: p.width_m, west: p.width_m };
-  const areas = p.window_area_m2
-    || { north: p.wwr * p.length_m * p.height_m, south: p.wwr * p.length_m * p.height_m };
-  const out = {};
-  for (const [side, a] of Object.entries(areas)) {
-    if (a > 0) out[side] = { area: a, width: wall[side] * Math.min(Math.sqrt(a / (wall[side] * p.height_m)), 0.95) };
-  }
-  return out;
-}
-
-function renderRoomStage(h) {
-  const stage = $("room-stage");
-  if (!result.agents?.length) { stage.innerHTML = ""; return; }
-  const p = ranFor ? JSON.parse(ranFor) : payload();    // the design that was simulated
-  const cut = isCut(h), tIn = result.indoor_temp[h], rhIn = result.humidity[h], hi = result.heat_index[h];
-  $("fan-badge").className = "badge" + (cut ? " off" : "");
-  $("fan-badge").textContent = cut ? `Power cut · fan off · ${tIn} °C` : `Fan on · ${tIn} °C · ${rhIn} % RH`;
-  $("room-title").textContent = `${p.length_m.toFixed(1)} × ${p.width_m.toFixed(1)} m · ${p.floor === "top" ? "top" : "middle"} floor · felt ${hi} °C`;
-
-  // Fit the rotated room into the drawing box
-  const W = 480, H = 360, CX = 240, CY = 150, BOXW = 330, BOXH = 200;
-  const rot = p.orientation_deg || 0, th = rot * Math.PI / 180;
-  const ac = Math.abs(Math.cos(th)), as = Math.abs(Math.sin(th));
-  const s = Math.min(BOXW / (p.length_m * ac + p.width_m * as), BOXH / (p.length_m * as + p.width_m * ac)); // px per m
-  const rw = p.length_m * s, rh = p.width_m * s;
-  // Room frame (origin at the centre, y down) -> screen
-  const P = (x, y) => [CX + x * Math.cos(th) - y * Math.sin(th), CY + x * Math.sin(th) + y * Math.cos(th)];
-  const txt = (x, y, t, size = 9.5, fill = "var(--muted-fg)", wall = false) => {
-    const [sx, sy] = P(x, y);
-    // Wall labels left or right of the room grow away from it
-    const anchor = !wall || Math.abs(sx - CX) < 20 ? "middle" : sx < CX ? "end" : "start";
-    return `<text x="${sx.toFixed(1)}" y="${sy.toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" font-family="var(--mono)" font-size="${size}" fill="${fill}">${t}</text>`;
-  };
-
-  // Windows (to scale) and overhangs (real depth), in the room frame
-  const wins = windowWidths(p), d = (p.shading_depth_m || 0) * s;
-  const glass = `fill="#7dd3fc" stroke="#0284c7" stroke-width="1"`, shade = `fill="#71717a" opacity="0.6"`;
-  let geo = "", labels = "";
-  for (const side of ["north", "east", "south", "west"]) {
-    const vertical = side === "east" || side === "west";
-    const sign = side === "north" || side === "west" ? -1 : 1;
-    const half = (vertical ? rw : rh) / 2;             // centre to this wall
-    const w = wins[side] ? wins[side].width * s : 0;
-    if (w) {
-      geo += vertical
-        ? `<rect x="${sign * half - 4}" y="${-w / 2}" width="8" height="${w}" ${glass}/>`
-        : `<rect x="${-w / 2}" y="${sign * half - 4}" width="${w}" height="8" ${glass}/>`;
-      if (d) geo += vertical
-        ? `<rect x="${sign > 0 ? half + 4 : -half - 4 - d}" y="${-w / 2 - 3}" width="${d}" height="${w + 6}" ${shade}/>`
-        : `<rect x="${-w / 2 - 3}" y="${sign > 0 ? half + 4 : -half - 4 - d}" width="${w + 6}" height="${d}" ${shade}/>`;
-    }
-    // Outside each wall: which way it faces, and its glass area
-    const off = half + (vertical ? 10 : 14) + (w ? d : 0);
-    const [lx, ly] = vertical ? [sign * off, 0] : [0, sign * off];
-    const face = compassName(FACING[side] + rot);
-    labels += txt(lx, ly, w ? `${face} · ${wins[side].area.toFixed(1)} m² glass` : face, 9.5, w ? "var(--fg-2)" : "var(--muted-fg)", true);
-  }
-
-  // Use zones and the fan scale with the room (sketches: not in the model)
-  const zone = (x, y, w, hh) => `<rect x="${x}" y="${y}" width="${w}" height="${hh}" rx="4" fill="none" stroke="var(--border)" stroke-dasharray="3 3"/>`;
-  const zh = rh * 0.26, pd = 8;
-  geo += zone(-rw / 2 + pd, -rh / 2 + pd, rw - 2 * pd, rh * 0.22)
-    + zone(-rw / 2 + pd, rh / 2 - pd - zh, rw * 0.42, zh)
-    + zone(rw / 2 - pd - rw * 0.34, rh / 2 - pd - zh, rw * 0.34, zh);
-  labels += txt(0, -rh / 2 + pd + rh * 0.11, wins.north ? "NEAR WINDOW" : "LIVING")
-    + txt(-rw / 2 + pd + rw * 0.21, rh / 2 - pd - zh / 2, "SLEEPING")
-    + txt(rw / 2 - pd - rw * 0.17, rh / 2 - pd - zh / 2, "KITCHEN");
-  const fr = Math.min(rw, rh) * 0.24, blade = Math.min(22, fr * 0.45);
-  geo += `<circle cx="0" cy="0" r="${fr}" fill="${cut ? "rgba(220,38,38,0.05)" : "rgba(21,128,61,0.06)"}" stroke="${cut ? "var(--loss)" : "var(--gain)"}" stroke-opacity="0.35" stroke-dasharray="4 3"/>
-    <g ${cut ? "" : `transform="rotate(${(h * 47) % 360})"`}>
-      <line x1="${-blade}" x2="${blade}" stroke="var(--muted-fg)" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
-      <line y1="${-blade}" y2="${blade}" stroke="var(--muted-fg)" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
-      <circle r="5" fill="var(--fg-2)"/></g>`;
-
-  // Each modelled person at this hour's position (pos y > 0 is the model's north wall)
-  let people = "";
-  const act = activeAgent();
-  const clamp = (v, a) => Math.max(-a, Math.min(a, v));
-  result.agents.forEach((ag, idx) => {
-    if (!ag.modelled) return;
-    const [nx, ny] = ag.hourly.pos[h] || [0, 0];
-    const x = clamp(nx * rw * 0.38 + (idx - 1.5) * 14, rw / 2 - 14);
-    const y = ny <= -0.75 ? rh / 2 + 26                 // away: outside the south wall
-      : clamp(-ny * rh * 0.38 + ((idx % 2) - 0.5) * 10, rh / 2 - 14);
-    const [ax, ay] = P(x, y);
-    const st = ag.hourly.status[h] || "safe", col = STATUS_COLOR[st], on = idx === activeIdx;
-    people += `<g class="svg-agent" data-ag="${idx}" transform="translate(${ax.toFixed(1)},${ay.toFixed(1)})" style="cursor:pointer">
-      ${st === "critical" || st === "danger" ? `<circle r="${on ? 24 : 19}" fill="${col}" opacity="0.22"/>` : ""}
-      <circle r="${on ? 15 : 12}" fill="${col}" stroke="${on ? "var(--fg)" : "#fff"}" stroke-width="${on ? 2.5 : 1.5}"/>
-      <circle cy="-3.5" r="3.2" fill="#fff"/><path d="M -5.5 5.5 C -5.5 1, 5.5 1, 5.5 5.5 Z" fill="#fff"/>
-      <rect x="-42" y="15" width="84" height="16" rx="4" fill="var(--card)" stroke="${on ? "var(--fg)" : "var(--border)"}"/>
-      <text y="26" text-anchor="middle" font-family="var(--mono)" font-size="9.5" font-weight="500" fill="var(--fg)">${esc(ag.name.split(" ")[0])} · ${ag.hourly.t_core[h].toFixed(2)}°</text></g>`;
-  });
-
-  // North arrow and a 1 m scale bar
-  const extras = `<g transform="translate(${W - 26}, 26)"><path d="M0 -14 L6 6 L0 2 L-6 6 Z" fill="var(--fg)"/>
-      <text y="20" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--fg)">N</text></g>
-    <g transform="translate(18, 24)"><line x2="${s}" stroke="var(--fg)" stroke-width="2"/>
-      <line y1="-4" y2="4" stroke="var(--fg)"/><line x1="${s}" x2="${s}" y1="-4" y2="4" stroke="var(--fg)"/>
-      <text x="${s / 2}" y="-8" text-anchor="middle" font-family="var(--mono)" font-size="9.5" fill="var(--muted-fg)">1 m</text></g>`;
-
-  const roomBg = `rgba(234, 88, 12, ${(0.04 + clamp01((hi - 32) / 14) * 0.18).toFixed(2)})`;
-  const quote = act ? act.hourly.feedback[h] || "" : "";
-  const qcol = act ? STATUS_COLOR[act.hourly.status[h] || "safe"] : "";
-  stage.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Room plan to scale with the household">
-    ${extras}
-    <g transform="translate(${CX},${CY}) rotate(${rot})">
-      <rect x="${-rw / 2}" y="${-rh / 2}" width="${rw}" height="${rh}" fill="${roomBg}" stroke="var(--fg)" stroke-width="3" rx="2"/>
-      ${geo}
-    </g>
-    ${labels}${people}
-    ${act ? `<g transform="translate(16, ${H - 42})">
-      <rect width="${W - 32}" height="36" rx="6" fill="var(--card)" stroke="${qcol}" stroke-width="1.5"/>
-      <text x="10" y="14" font-family="var(--mono)" font-size="9.5" font-weight="500" fill="${qcol}">${esc(act.name.toUpperCase())} · ${esc(act.hourly.activity[h])}</text>
-      <text x="10" y="28" font-family="var(--sans)" font-size="10.5" fill="var(--fg)">“${esc(quote.length > 78 ? quote.slice(0, 76) + "…" : quote)}”</text></g>` : ""}
-  </svg>`;
-  stage.querySelectorAll(".svg-agent").forEach(g => g.addEventListener("click", () => selectAgent(+g.dataset.ag)));
 }
 
 function renderAgentCards(h) {
@@ -921,48 +908,93 @@ function renderAgentCards(h) {
 
 function renderAgentChart() {
   const wrap = $("agent-chart");
-  if (!result.agents?.some(a => a.modelled)) { wrap.innerHTML = ""; return; }
-  const W = 1000, H = 195, L = 42, R = 72, T = 14, B = 24;
+  const W = Math.floor(wrap.clientWidth);
+  if (!W || !result.agents?.some(a => a.modelled)) { if (W) wrap.innerHTML = ""; return; }
+  const H = 180, L = 34, R = 10, T = 22, B = 20;
   const f = weekFrame(W, H, L, R, T, B, 36.4, 39.0);
   let g = f.g;
   for (const v of [36.5, 37.0, 37.5, 38.0, 38.5]) {
     g += `<line class="grid" x1="${L}" x2="${W - R}" y1="${f.y(v)}" y2="${f.y(v)}"/>`;
-    g += `<text x="${L - 6}" y="${f.y(v) + 4}" text-anchor="end">${v.toFixed(1)}°</text>`;
+    g += `<text x="${L - 5}" y="${f.y(v) + 4}" text-anchor="end">${v.toFixed(1)}</text>`;
   }
   const lim = BODY().core_limit_c;
   g += `<line class="limit" x1="${L}" x2="${W - R}" y1="${f.y(lim)}" y2="${f.y(lim)}"/>`;
-  g += `<text class="limit-label" x="${W - R + 5}" y="${f.y(lim) + 4}">${lim.toFixed(1)} °C</text>`;
   const keys = [];
   result.agents.forEach((ag, idx) => {
     if (!ag.modelled) return;
     const col = AGENT_COLORS[idx % AGENT_COLORS.length], on = idx === activeIdx;
-    g += `<path fill="none" stroke="${col}" stroke-width="${on ? 2.4 : 1.3}" opacity="${on ? 1 : 0.6}" d="${f.path(ag.hourly.t_core)}"/>`;
-    keys.push([`stroke="${col}" stroke-width="${on ? 2.4 : 1.3}"`, `${ag.name.split(" ")[0]} (${ag.age})`]);
+    g += `<path fill="none" stroke="${col}" stroke-width="${on ? 2.2 : 1.2}" opacity="${on ? 1 : 0.55}" d="${f.path(ag.hourly.t_core)}"/>`;
+    keys.push([`stroke="${col}" stroke-width="${on ? 2.2 : 1.2}"`, ag.name.split(" ")[0]]);
   });
   g += `<line class="cursor" id="agent-cursor" x1="0" x2="0" y1="${T}" y2="${H - B}" visibility="hidden"/>`;
   g += `<rect id="agent-hit" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent"/>`;
-  wrap.innerHTML = `<svg viewBox="0 -14 ${W} ${H + 14}" role="img" aria-label="JOS-3 core temperature for each person">${keyRow(keys, L)}${g}</svg>`;
-  bindHover(wrap, "agent-hit", L, W - L - R);
+  wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="JOS-3 core temperature for each person">${keyRow(keys, L)}${g}</svg>`;
+  bindDrag(wrap, "agent-hit", L, W - L - R);
 }
 
-function bindWeekControls() {
-  $("compare").addEventListener("change", e => {
-    preview = e.target.value === "" ? null : result.changes[+e.target.value];
-    renderWeek(); renderChart(); setHour(hour);
-  });
-  $("hour-slider").addEventListener("input", e => setHour(+e.target.value));
-  $("play").addEventListener("click", () => {
-    if (playTimer) { clearInterval(playTimer); playTimer = null; $("play").textContent = "Play"; return; }
-    $("play").textContent = "Pause";
-    playTimer = setInterval(() => setHour((hour + 1) % HOURS), 180);
-  });
+// ----- Basis: what the result rests on -------------------------------------
+function renderBasis() {
+  const sc = OPT.scenario, ev = OPT.evidence || {}, cal = OPT.calibration, p = JSON.parse(ranFor), s = result.summary;
+  const w = weatherOf(p.weather), hw = ev.heatwave, city = ev.city;
+  const row = (name, tag, val, src) => `<div class="basis-row"><div class="top"><span>${name}</span><span class="tagline ${tag.toLowerCase()}">${tag}</span></div>
+    <div class="val">${val}</div><div class="src">${src}</div></div>`;
+  const ph = OPT.physics, wall = ph.walls[p.wall], roof = ph.roofs[p.roof];
+  const rows = [
+    row("Outdoor weather", w.source, `${esc(w.label)} air · ${sc.first_day}–${sc.last_day} ${sc.month} 2024`,
+      esc(w.note) + (hw ? ` Week mean outdoor heat index ${hw.week_stats.mean_heat_index_c} °C (typical-year file: ${hw.typical_year_week.mean_heat_index_c} °C). ${hw.hours_from_station}/${hw.hours_needed} hours from the station; sunlight from ERA5.` : "")),
+    row("Building physics", "Calibrated", cal ? `Internal mass ${cal.adopted.internal_mass_m2} m², appliances ${cal.adopted.appliances_peak_w} W, AirflowNetwork` : "Calibrated defaults",
+      cal ? `Fitted on ${cal.homes} monitored Dhaka homes: hourly error ${cal.adopted_scores.fit_rmse} °C (check period ${cal.adopted_scores.check_rmse} °C). Checked on Delhi homes without refitting.` : ""),
+    row("Window use", p.night_vent ? "Observed" : "Chosen", p.night_vent ? "Open day and night" : "Shut 22:00–06:00",
+      p.night_vent ? "What homes without AC do; every calibration home had its windows open."
+        : "Not validated: no monitored home shut its windows at night. Treat this case with care."),
+    row("Ceiling fan", "Standard", `Cooling effect about ${sc.fan_credit_c} °C at ${sc.fan_air_speed_ms} m/s`, "ASHRAE 55-2023 (SET method), worked out every hour from the room's air, radiant temperature and humidity. Off during the power cut."),
+    row("Power cut", "Chosen", p.cut_start_hour === null || p.cut_start_hour === undefined ? "None" : `${pad(p.cut_start_hour)}:00–${pad((p.cut_start_hour + 1) % 24)}:00 every day`, "A scenario, not a forecast. The summary also shows the worst hour of the day for a cut."),
+    row("Safe limit", "Chosen", `Heat index below ${sc.safe_limit_c} °C`, `US NWS “Danger” band. Cross-check with the extended heat index (Lu &amp; Romps 2022): ${s.safe_hours_extended_hi ?? "–"} safe hours, peak ${s.max_extended_hi_c ?? "–"} °C. The NWS value is the more cautious count.`),
+    row("Constructions", "Standard", `Wall U ${wall.u_value} · roof U ${roof.u_value} W/m²K · glass U ${ph.glass_u}`, `Wall ${wall.heat_capacity_kj} and roof ${roof.heat_capacity_kj} kJ/m²K heat capacity. Material values from BIS SP 41.`),
+  ];
+  const cityLine = city ? `Chennai's city-centre station is ${signed(city.season.dawn_0530_d_temp_c)} °C vs the airport at dawn and ${signed(city.season.afternoon_1430_d_temp_c)} °C at 14:30 (Apr–Jun 2016–25), with ${Math.round(city.season.wind_ratio_mean * 100)} % of its wind.` : "";
+  $("basis").innerHTML = `
+    <h3 class="h" style="margin:0 0 8px">Inputs of this run</h3>
+    <div class="basis-table">${rows.join("")}</div>
+    <h3 class="h" style="margin:16px 0 8px">Known limits</h3>
+    <ul class="lims">
+      <li class="ok"><b>City air and wind: measured</b>${cityLine} Switch the outdoor air under Scenario to test it.</li>
+      <li class="ok"><b>Heat index range: cross-checked</b>Every run is also scored with the extended heat index, valid at any temperature and humidity.</li>
+      <li class="part"><b>Daily peak about 2 h early</b>${cal ? `The model's room peaks around ${cal.peak_hour_sim}:00, monitored homes around ${cal.peak_hour_meas}:00.` : ""} The 20:00 hour is right. Roof and internal mass are ruled out as the cause; daytime window use needs sensors.</li>
+      <li><b>Street AC heat</b>Air beside AC outdoor units is not in either station. The +1 °C case is from studies in Paris and Phoenix.</li>
+      <li><b>No Chennai homes yet</b>The calibration homes are in Dhaka. A Chennai field campaign is planned for 2027.</li>
+      <li><b>Children</b>No validated body model for children: they are covered by the heat index only.</li>
+    </ul>`;
+}
+
+// ---------------------------------------------------------------------------
+// Bindings
+// ---------------------------------------------------------------------------
+function bindTimeline() {
+  bindStrip();
+  $("compare").addEventListener("change", e => setPreview(e.target.value === "" ? null : result.changes[+e.target.value]));
+  $("play").addEventListener("click", togglePlay);
+  $("step-back").addEventListener("click", () => setHour((hour + HOURS - 1) % HOURS));
+  $("step-fwd").addEventListener("click", () => setHour((hour + 1) % HOURS));
   $("show-all").addEventListener("click", () => { showAll = !showAll; renderChanges(); });
   $("undo").addEventListener("click", undo);
+  window.addEventListener("oasis3d-focus", e => {
+    const i = (result?.agents || []).findIndex(a => a.id === e.detail);
+    if (i >= 0 && result.agents[i].modelled) selectAgent(i, true);
+  });
+  document.addEventListener("keydown", e => {
+    if (e.target.matches("input, select, textarea") || $("app").hidden || !result) return;
+    if (e.key === " ") { e.preventDefault(); togglePlay(); }
+    if (e.key === "ArrowRight" && !e.target.matches(".tab, .strip")) setHour((hour + 1) % HOURS);
+    if (e.key === "ArrowLeft" && !e.target.matches(".tab, .strip")) setHour((hour + HOURS - 1) % HOURS);
+  });
+  let timer = null;
+  new ResizeObserver(() => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { if (result && !$("app").hidden) { renderChart(); if (tab === "people") renderAgentChart(); setHour(hour); } }, 120);
+  }).observe($("dock"));
 }
 
-// ---------------------------------------------------------------------------
-// Theme
-// ---------------------------------------------------------------------------
 function bindTheme() {
   const root = document.documentElement;
   try { const saved = localStorage.getItem("oasis-theme"); if (saved) root.dataset.theme = saved; } catch (_) {}
@@ -988,14 +1020,12 @@ async function start() {
     $("loading").hidden = true;
     $("error").textContent = `Could not reach the OASIS server (${err.message}). Start it with: python run_server.py`;
     $("error").hidden = false;
-    toast("Server not reachable", { type: "error", detail: "Start it with python run_server.py", duration: 10000 });
     return;
   }
   const sc = OPT.scenario;
-  const scen = `${sc.city} · ${sc.first_day}–${sc.last_day} ${sc.month} heatwave · power cut ${pad(sc.cut_start_hour)}:00–${pad(sc.cut_end_hour)}:00`;
-  $("scenario").textContent = $("intro-scenario").textContent = scen;
-  $("limit").textContent = `${sc.safe_limit_c} °C`;
-  $("fan-credit").textContent = `about ${sc.fan_credit_c} °C`;
+  $("intro-scenario").textContent = `${sc.city} · ${sc.first_day}–${sc.last_day} ${sc.month} 2024 recorded heatwave · power cut ${pad(sc.cut_start_hour)}:00–${pad(sc.cut_end_hour)}:00`;
+  const cal = OPT.calibration;
+  $("sb-cal").textContent = cal ? `Calibrated on ${cal.homes} monitored homes · error ${cal.adopted_scores.fit_rmse} °C` : "";
 
   state = { ...OPT.baseline };
   roster = JSON.parse(JSON.stringify(OPT.default_agents || []));
@@ -1003,7 +1033,7 @@ async function start() {
   bindHousehold();
   bindRhino();
   bindTabs();
-  bindWeekControls();
+  bindTimeline();
   renderPeople();
   $("run").addEventListener("click", simulate);
   syncForm();
