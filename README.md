@@ -19,7 +19,7 @@ Master's thesis project: Master in AI for Architecture and the Built Environment
 | | |
 |---|---|
 | Weather | Chennai EPW (`data/weather/chennai.epw`) |
-| Period | 10–16 May, the hottest week: 7 days × 24 h = **168 hours** |
+| Period | 1–7 May 2024, the hottest recorded Chennai week (Meenambakkam station + ERA5 sunlight), after 7 spin-up days: 7 days × 24 h = **168 hours** |
 | Power cut | Every night **20:00–21:00**: ceiling fans off |
 | Safe hour | Indoor **heat index < 41 °C** (US NWS formula on indoor air temperature + humidity) |
 | Fan credit | When fans run, air temperature is lowered by the **ASHRAE 55 cooling effect** (about 2 °C, every hour) before the heat index is computed; no credit during the cut |

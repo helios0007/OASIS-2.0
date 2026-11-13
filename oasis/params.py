@@ -16,14 +16,17 @@ BASELINE = {
     "roof_solar_absorptance": 0.7,   # grey concrete
     "wwr": 0.15,               # window-to-wall ratio
     "shading_depth_m": 0.0,    # window overhang
-    "night_vent": False,       # windows open at night?
+    # Windows open day and night: what free-running homes without AC do
+    # (all Dhaka calibration homes; field knowledge for Chennai), and the
+    # case the calibration validated. False = shut 22:00-06:00.
+    "night_vent": True,
     "occupants": 4,
 }
 
 INTERVENTIONS = {
     "cool_roof":       {"roof_solar_absorptance": 0.2},  # white reflective coating
     "roof_insul":      {"roof": "rcc_150_insul_50"},     # + 50 mm insulation
-    "shade_nightvent": {"shading_depth_m": 0.6, "night_vent": True},
+    "shading":         {"shading_depth_m": 0.6},          # 0.6 m window overhangs
 }
 
 

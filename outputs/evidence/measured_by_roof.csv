@@ -1,0 +1,9 @@
+city,group,homes,peak_hour,swing_c,t_cut_c,excess_cut_c
+Dhaka,"Concrete / slab, top floor",12,17.0,1.8,31.4,2.9
+Dhaka,Floor above,5,15.0,0.7,30.4,2.0
+Dhaka,"Tin sheet, top floor",34,13.0,4.5,30.8,2.3
+Dhaka,Outdoor station,1,13.0,5.0,28.5,0.0
+Delhi,"Concrete / slab, top floor",11,18.0,3.8,36.2,3.8
+Delhi,Floor above,5,17.0,0.9,31.8,-0.6
+Delhi,"Tin sheet, top floor",8,15.0,7.5,36.7,4.3
+Delhi,Outdoor station,1,13.0,9.6,32.4,0.0

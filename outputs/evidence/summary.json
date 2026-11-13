@@ -1,0 +1,116 @@
+{
+  "settings": {
+    "internal_mass_m2": 320.0,
+    "appliances_peak_w": 100.0,
+    "wall_leakage_cm2_per_m2": 8.0
+  },
+  "groups": {
+    "Delhi": {
+      "homes": 3,
+      "peak_sim_median": 15.0,
+      "peak_meas_median": 18.0,
+      "peak_lag_h_mean": 2.3,
+      "rmse_all_c": 1.99,
+      "evening_err_c": -2.07,
+      "evening_rmse_c": 2.56,
+      "excess_cut_sim_c": 2.75,
+      "excess_cut_meas_c": 4.86
+    },
+    "Delhi (cooler homes)": {
+      "homes": 14,
+      "peak_sim_median": 15.0,
+      "peak_meas_median": 19.0,
+      "peak_lag_h_mean": 3.7,
+      "rmse_all_c": 3.48,
+      "evening_err_c": 2.25,
+      "evening_rmse_c": 2.79,
+      "excess_cut_sim_c": 2.7,
+      "excess_cut_meas_c": 0.52
+    },
+    "Dhaka": {
+      "homes": 12,
+      "peak_sim_median": 14.0,
+      "peak_meas_median": 17.0,
+      "peak_lag_h_mean": 1.8,
+      "rmse_all_c": 1.11,
+      "evening_err_c": 0.06,
+      "evening_rmse_c": 1.01,
+      "excess_cut_sim_c": 3.07,
+      "excess_cut_meas_c": 3.02
+    }
+  },
+  "measured_by_roof": [
+    {
+      "city": "Dhaka",
+      "group": "Concrete / slab, top floor",
+      "homes": 12,
+      "peak_hour": 17.0,
+      "swing_c": 1.8,
+      "t_cut_c": 31.4,
+      "excess_cut_c": 2.9
+    },
+    {
+      "city": "Dhaka",
+      "group": "Floor above",
+      "homes": 5,
+      "peak_hour": 15.0,
+      "swing_c": 0.7,
+      "t_cut_c": 30.4,
+      "excess_cut_c": 2.0
+    },
+    {
+      "city": "Dhaka",
+      "group": "Tin sheet, top floor",
+      "homes": 34,
+      "peak_hour": 13.0,
+      "swing_c": 4.5,
+      "t_cut_c": 30.8,
+      "excess_cut_c": 2.3
+    },
+    {
+      "city": "Dhaka",
+      "group": "Outdoor station",
+      "homes": 1,
+      "peak_hour": 13.0,
+      "swing_c": 5.0,
+      "t_cut_c": 28.5,
+      "excess_cut_c": 0.0
+    },
+    {
+      "city": "Delhi",
+      "group": "Concrete / slab, top floor",
+      "homes": 11,
+      "peak_hour": 18.0,
+      "swing_c": 3.8,
+      "t_cut_c": 36.2,
+      "excess_cut_c": 3.8
+    },
+    {
+      "city": "Delhi",
+      "group": "Floor above",
+      "homes": 5,
+      "peak_hour": 17.0,
+      "swing_c": 0.9,
+      "t_cut_c": 31.8,
+      "excess_cut_c": -0.6
+    },
+    {
+      "city": "Delhi",
+      "group": "Tin sheet, top floor",
+      "homes": 8,
+      "peak_hour": 15.0,
+      "swing_c": 7.5,
+      "t_cut_c": 36.7,
+      "excess_cut_c": 4.3
+    },
+    {
+      "city": "Delhi",
+      "group": "Outdoor station",
+      "homes": 1,
+      "peak_hour": 13.0,
+      "swing_c": 9.6,
+      "t_cut_c": 32.4,
+      "excess_cut_c": 0.0
+    }
+  ]
+}

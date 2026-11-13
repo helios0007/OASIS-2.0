@@ -24,7 +24,7 @@ CHANGES = {
     "as drawn": {},
     "white roof": {"roof_solar_absorptance": 0.2},
     "roof insulation": {"roof": "rcc_150_insul_50"},
-    "windows open at night": {"night_vent": True},
+    "windows shut at night": {"night_vent": False},
     "0.6 m overhangs": {"shading_depth_m": 0.6},
 }
 

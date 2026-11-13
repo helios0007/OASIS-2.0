@@ -1,5 +1,5 @@
 design,hours_total,safe_hours,danger_hours,cut_hours_in_danger,degree_hours_over_limit,max_heat_index_c,max_indoor_temp_c,mean_indoor_temp_c,safe_hours_gained
-baseline,168,116,52,5,199.0,49.6,38.8,36.3,0
-cool_roof,168,142,26,1,56.1,46.4,37.6,34.6,26
-roof_insul,168,124,44,2,123.0,47.3,37.8,35.4,8
-shade_nightvent,168,162,6,4,15.1,47.3,38.3,34.7,46
+baseline,168,59,109,7,284.2,50.0,38.5,35.4,0
+cool_roof,168,98,70,7,181.8,48.4,37.3,34.4,39
+roof_insul,168,86,82,7,197.7,48.7,37.5,34.7,27
+shading,168,60,108,7,278.2,49.9,38.4,35.3,1

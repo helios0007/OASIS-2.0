@@ -1,0 +1,9 @@
+city,logger,group,days,share_hours_over_limit_pct,share_days_cut_over_limit_pct,heat_index_cut_mean_c
+Dhaka,outdoor station,Outdoor station,46,22.1,2.2,34.1
+Dhaka,10692987,"Tin sheet, top floor",46,55.4,65.2,41.4
+Dhaka,10692991,"Tin sheet, top floor",46,62.0,67.4,42.4
+Dhaka,10692992,"Tin sheet, top floor",46,35.1,8.7,35.9
+Dhaka,10692994,"Concrete / slab, top floor",46,27.1,47.8,39.7
+Dhaka,10693002,Floor above,46,72.5,69.6,42.3
+Dhaka,10693003,"Concrete / slab, top floor",46,15.5,26.1,38.2
+Delhi,outdoor station,Outdoor station,61,20.6,14.8,35.4

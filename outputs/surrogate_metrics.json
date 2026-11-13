@@ -2,7 +2,7 @@
   "designs_total": 1512,
   "designs_train": 1209,
   "designs_test": 303,
-  "r2": 0.997,
-  "mae_hours": 0.77,
-  "max_error_hours": 4.3
+  "r2": 0.996,
+  "mae_hours": 1.5,
+  "max_error_hours": 10.3
 }

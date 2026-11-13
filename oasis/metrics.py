@@ -48,8 +48,10 @@ def column(df, text):
     return df[[c for c in df.columns if text in c][0]]
 
 
-def safe_hours(csv_path):
-    """Summary numbers and the hourly series for one run."""
+def safe_hours(csv_path, cut_hours=None):
+    """Summary numbers and the hourly series for one run.
+    cut_hours: hours of the day with no fan (power cut); default config's
+    20:00-21:00, () for no cut."""
     df = pd.read_csv(csv_path)
     t = column(df, "Zone Mean Air Temperature")
     rh = column(df, "Zone Air Relative Humidity")
@@ -60,7 +62,9 @@ def safe_hours(csv_path):
 
     # Row 0 is 00:00-01:00, so row 20 is the 20:00-21:00 power cut.
     hour = pd.Series(range(len(df))) % 24
-    cut = hour.between(config.CUT_START_HOUR, config.CUT_END_HOUR - 1)
+    if cut_hours is None:
+        cut_hours = range(config.CUT_START_HOUR, config.CUT_END_HOUR)
+    cut = hour.isin(list(cut_hours))
 
     # Fan on: the person feels cooler. During the cut: no fan, no credit.
     t_felt = t - np.where(cut, 0.0, fan_credit_c(t, t_mrt, rh))

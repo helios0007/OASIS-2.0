@@ -1,0 +1,19 @@
+weather,design,power_cut,hours_total,safe_hours,danger_hours,cut_hours_in_danger,degree_hours_over_limit,max_heat_index_c,max_indoor_temp_c,mean_indoor_temp_c,nights_cut_in_danger,cut_max_heat_index_c,night_safe_hours_22_06,mean_outdoor_temp_c,outdoor_mean_heat_index_c
+measured outdoor air,top floor,heatwave + power cut 20-21 h,168,59,109,7,284.2,50.0,38.5,35.4,7,50.0,31,33.45,45.1
+measured outdoor air,top floor,heatwave alone (no power cut),168,62,106,0,240.5,49.2,38.5,35.4,0,,31,33.45,45.1
+measured outdoor air,top floor,power cut at peak heat (14-15 h),168,62,106,7,282.7,52.5,38.5,35.4,7,52.5,31,33.45,45.1
+measured outdoor air,middle floor,heatwave + power cut 20-21 h,168,95,73,7,183.8,48.4,37.3,34.5,7,48.4,50,33.45,45.1
+measured outdoor air,middle floor,heatwave alone (no power cut),168,99,69,0,146.3,48.1,37.3,34.5,0,,50,33.45,45.1
+measured outdoor air,middle floor,power cut at peak heat (14-15 h),168,98,70,7,186.8,51.0,37.3,34.5,7,51.0,50,33.45,45.1
++ neighbours' AC heat (+1 C at night),top floor,heatwave + power cut 20-21 h,168,34,134,7,351.3,50.8,38.7,35.8,7,50.8,15,33.91,45.9
++ neighbours' AC heat (+1 C at night),top floor,heatwave alone (no power cut),168,35,133,0,306.3,49.5,38.7,35.8,0,,15,33.91,45.9
++ neighbours' AC heat (+1 C at night),top floor,power cut at peak heat (14-15 h),168,35,133,7,348.7,52.8,38.7,35.8,7,52.8,15,33.91,45.9
++ neighbours' AC heat (+1 C at night),middle floor,heatwave + power cut 20-21 h,168,72,96,7,221.8,49.2,37.6,34.9,7,49.2,37,33.91,45.9
++ neighbours' AC heat (+1 C at night),middle floor,heatwave alone (no power cut),168,75,93,0,181.5,48.4,37.6,34.9,0,,37,33.91,45.9
++ neighbours' AC heat (+1 C at night),middle floor,power cut at peak heat (14-15 h),168,75,93,7,222.5,51.2,37.6,34.9,7,51.2,37,33.91,45.9
++ AC heat doubled (+2 C at night),top floor,heatwave + power cut 20-21 h,168,18,150,7,432.2,51.5,39.0,36.2,7,51.5,5,34.37,46.6
++ AC heat doubled (+2 C at night),top floor,heatwave alone (no power cut),168,19,149,0,386.9,49.7,39.0,36.2,0,,5,34.37,46.6
++ AC heat doubled (+2 C at night),top floor,power cut at peak heat (14-15 h),168,19,149,7,429.4,53.1,39.0,36.2,7,53.1,5,34.37,46.6
++ AC heat doubled (+2 C at night),middle floor,heatwave + power cut 20-21 h,168,40,128,7,278.8,49.9,37.8,35.3,7,49.9,16,34.37,46.6
++ AC heat doubled (+2 C at night),middle floor,heatwave alone (no power cut),168,43,125,0,236.4,48.7,37.8,35.3,0,,16,34.37,46.6
++ AC heat doubled (+2 C at night),middle floor,power cut at peak heat (14-15 h),168,43,125,7,277.7,51.5,37.8,35.3,7,51.5,16,34.37,46.6

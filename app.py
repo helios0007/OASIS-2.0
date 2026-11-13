@@ -125,7 +125,7 @@ def main():
     <div class="wb-banner">
       <div>
         <span style="color:#06b6d4;font-family:monospace;font-size:11px;font-weight:700">OASIS 2.0 · ENVIRONMENTAL & THERMAL SIMULATION WORKBENCH</span>
-        <h2 style="margin:0;font-size:20px;color:#f8fafc">Chennai Heatwave (10–16 May) · Nightly 20:00–21:00 Power Cut</h2>
+        <h2 style="margin:0;font-size:20px;color:#f8fafc">Chennai Heatwave (1–7 May 2024, recorded) · Nightly 20:00–21:00 Power Cut</h2>
       </div>
       <div style="font-size:12px;color:#cbd5e1">
         Safe Limit: <b>&lt; {SAFE_LIMIT_C:.0f} °C HI</b> · Ceiling Fan: <b>ASHRAE 55 cooling effect (about {FAN_CREDIT_C:.0f} °C)</b> · Full Web Studio also live at <a href="http://127.0.0.1:8000" target="_blank" style="color:#06b6d4;font-weight:700">http://127.0.0.1:8000</a>

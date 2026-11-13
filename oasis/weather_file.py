@@ -21,6 +21,8 @@ SITES = {
     # name, country, latitude, longitude, time zone (h), elevation (m)
     "Dhaka": ("Dhaka.AWS", "BGD", 23.777176, 90.399452, 6.0, 8.0),
     "Delhi": ("Delhi.AWS", "IND", 28.544600, 77.147801, 5.5, 216.0),
+    # Meenambakkam airport, WMO 43279 (same site as the TMYx template)
+    "Chennai": ("Chennai.Meenambakkam", "IND", 12.994000, 80.181000, 5.5, 15.8),
 }
 
 SOLAR_CONSTANT = 1367.0   # W/m2
@@ -70,7 +72,7 @@ def cloud_cover_tenths(kt, cos_z, index):
     return np.round(10 * cover.values).astype(int)
 
 
-def make_epw(city, weather, out_path: Path, max_gap_h=3):
+def make_epw(city, weather, out_path: Path, max_gap_h=3, source=None):
     """Write an .epw for `city` from hourly station weather.
     Gaps up to max_gap_h hours are filled by straight-line interpolation.
     Returns the hours (index) that are still missing."""
@@ -93,12 +95,12 @@ def make_epw(city, weather, out_path: Path, max_gap_h=3):
         # EPW hour h covers (h-1):00 to h:00, so the hour starting at t is h = t.hour + 1
         by_key[(t.month, t.day, t.hour + 1)] = i
 
-    lines = config.EPW.read_text().splitlines()
+    lines = config.TMYX_EPW.read_text().splitlines()
     head, rows = lines[:8], lines[8:]
     head[0] = (f"LOCATION,{name},,{country},OASIS station file,000000,"
                f"{lat:.4f},{lon:.4f},{tz:.1f},{elev:.1f}")
-    head[5] = (f"COMMENTS 1,\"Hours measured by the {city} weather station "
-               f"(Tasgaonkar et al. 2022) replace the Chennai template\"")
+    source = source or f"the {city} weather station (Tasgaonkar et al. 2022)"
+    head[5] = f"COMMENTS 1,\"Hours measured by {source} replace the Chennai template\""
 
     out = []
     for line in rows:

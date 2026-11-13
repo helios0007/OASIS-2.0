@@ -81,6 +81,7 @@ DEFAULTS = {
     "internal_mass_m2": INTERNAL_MASS_M2,
     "windows_open_hour": WINDOWS_OPEN_HOUR,
     "windows_close_hour": WINDOWS_CLOSE_HOUR,
+    "openable_fraction": OPENABLE_FRACTION,
 }
 
 
@@ -126,8 +127,9 @@ def add_settings(idf, p):
     )
     idf.newidfobject("TIMESTEP", Number_of_Timesteps_per_Hour=4)
     idf.newidfobject("SCHEDULETYPELIMITS", Name="any_number")   # used by all schedules
-    # Default: the heatwave week. Calibration runs set their own dates.
-    start = p.get("run_start", config.RUN_START)
+    # Default: the heatwave week plus spin-up days before it (dropped again
+    # by simulate.run). Calibration runs set their own dates.
+    start = p.get("run_start", config.SPINUP_START)
     end = p.get("run_end", config.RUN_END)
     idf.newidfobject(
         "RUNPERIOD",
@@ -426,7 +428,9 @@ def add_ventilation(idf, p):
     p["airflow_model"]: "afn" (default, calibrated) uses the AirflowNetwork
     (add_airflow_network), which needs no airflow_factor; "simple" uses
     EnergyPlus's wind-and-stack opening model scaled by airflow_factor."""
-    if p["night_vent"]:
+    if p.get("windows_open_steps"):          # explicit daily pattern (checks only)
+        add_day_schedule(idf, "windows_open", p["windows_open_steps"])
+    elif p["night_vent"]:
         add_day_schedule(idf, "windows_open", [(24, 1.0)])
     else:
         add_day_schedule(idf, "windows_open",
@@ -441,7 +445,7 @@ def add_ventilation(idf, p):
             "ZONEVENTILATION:WINDANDSTACKOPENAREA",
             Name=f"vent_{side}",
             Zone_or_Space_Name=ZONE,
-            Opening_Area=w * h * OPENABLE_FRACTION * setting(p, "airflow_factor"),
+            Opening_Area=w * h * setting(p, "openable_fraction") * setting(p, "airflow_factor"),
             Opening_Area_Fraction_Schedule_Name="windows_open",
             Effective_Angle=(FACING[side] + p["orientation_deg"]) % 360,
             Height_Difference=0.0,   # one storey: wind-driven only
@@ -501,7 +505,7 @@ def add_airflow_network(idf, p):
             CLOSED_WINDOW_COEFF, FLOW_EXPONENT, 0.0001, DISCHARGE_COEFF)
     for side in window_sizes(p):
         add_obj(idf, "AIRFLOWNETWORK:MULTIZONE:SURFACE", f"window_{side}",
-                "window_opening", "", OPENABLE_FRACTION, "ZoneLevel")
+                "window_opening", "", setting(p, "openable_fraction"), "ZoneLevel")
 
     # Leaks through each outside wall, in proportion to its area
     shared = set(p.get("shared_walls", ()))

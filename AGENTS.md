@@ -22,7 +22,7 @@ This repository is shared between **Claude Code** and **Antigravity (Gemini)**. 
 ### Description
 **OASIS (Overheating Assessment System for Intervention Strategies)** is a Master's thesis project (Master in AI for Architecture and the Built Environment, IAAC Barcelona, 2026/27, by Nithik Vairamuthu).
 
-It is a design-stage simulation and decision-support tool for new residential buildings (PMAY-style flats) in hot-humid Indian cities (primary focus: **Chennai**). OASIS predicts how many **safe hours** (hours with indoor Heat Index < 41 °C) a free-running home gives its occupants during a 7-day May heatwave (10–16 May) combined with a nightly 20:00–21:00 power cut (when ceiling fans switch off), and ranks passive design interventions (roof reflectance, roof insulation, wall material, window-to-wall ratio, shading overhangs, night ventilation, orientation, floor level) by safe hours gained. It also includes calibration scripts against measured indoor logger datasets from Dhaka and Delhi (Tasgaonkar et al. 2022).
+It is a design-stage simulation and decision-support tool for new residential buildings (PMAY-style flats) in hot-humid Indian cities (primary focus: **Chennai**). OASIS predicts how many **safe hours** (hours with indoor Heat Index < 41 °C) a free-running home gives its occupants during a recorded 7-day Chennai heatwave (1–7 May 2024, Meenambakkam station + ERA5 sunlight; 7 spin-up days before) combined with a nightly 20:00–21:00 power cut (when ceiling fans switch off), and ranks passive design interventions (roof reflectance, roof insulation, wall material, window-to-wall ratio, shading overhangs, night ventilation, orientation, floor level) by safe hours gained. It also includes calibration scripts against measured indoor logger datasets from Dhaka and Delhi (Tasgaonkar et al. 2022).
 
 ### Tech Stack
 - **OS & Python**: Windows, Python 3.13 in `.venv` (`.venv\Scripts\python.exe`).
@@ -46,6 +46,10 @@ Run all commands from the project root (`D:\IAAC\OASIS 2.0`) using the `.venv` P
 | Assess a Rhino `.3dm` model in CLI | `python run_rhino.py data/rhino/sample_flat.3dm` | Prints safe hours and ranked interventions |
 | Run model calibration (Dhaka homes) | `python calibrate.py` | `outputs/calibration/summary.json`, `grid_results.csv`, `hourly.csv` |
 | Calibration round 4 (adopted) / Delhi check | `python calibrate_homes.py --airflow afn` / `... --validate Delhi` | `outputs/calibration/homes/afn/summary.json`, `afn_validate_delhi/` |
+| Evening check (measured evidence + model at the cut hour) / lag test | `python check_evening.py` / `python check_lag.py` | `outputs/evidence/` |
+| Recorded Chennai heatwave (download + .epw) / MVP headline run | `python get_heatwave.py` / `python run_heatwave.py` | `data/weather/chennai_heatwave.epw`, `outputs/heatwave/` |
+| Recorded heatwave ± neighbours' AC heat × power cut 20–21 h / none / at peak heat | `python run_scenarios.py` | `outputs/scenarios/` |
+| Progress deck (numbers from outputs) | `python docs/deck/collect.py` then `node docs/deck/build.js` (needs pptxgenjs, react-icons, sharp; `PPTX_SKILL` for the theme step) | `docs/OASIS_2.0_progress.pptx` |
 | Plot calibration charts | `python plot_calibration.py` | `outputs/calibration/calibration_daily_cycle.png`, `calibration_timeseries.png` |
 | Start Streamlit app | `streamlit run app.py` | Local browser app (`http://localhost:8501`) |
 | Start FastAPI + Web UI server | `python run_server.py` | `http://127.0.0.1:8000` |
@@ -54,7 +58,7 @@ Run all commands from the project root (`D:\IAAC\OASIS 2.0`) using the `.venv` P
 There is no `pytest` suite yet; verification uses dedicated check scripts and API probes:
 1. **EnergyPlus smoke test**: `python test_run.py` — runs `1ZoneUncontrolled.idf` against `data/weather/chennai.epw`, checks that `outputs/test_run/eplusout.csv` is created and `eplusout.err` has no `** Severe **` lines.
 2. **Baseline model sanity check**: `python check_baseline.py` — builds and simulates `BASELINE` (`outputs/baseline.idf`), prints summary stats (`min`, `mean`, `max` indoor temperature/humidity and peak hour), and outputs the final status line of `eplusout.err`.
-3. **Rhino parser & live assessment check**: `python make_sample_rhino.py` followed by `python run_rhino.py data/rhino/sample_flat.3dm` (expected after calibration round 4: 115 safe hours as drawn, white roof coating +28).
+3. **Rhino parser & live assessment check**: `python make_sample_rhino.py` followed by `python run_rhino.py data/rhino/sample_flat.3dm` (expected on the recorded heatwave, windows open day and night: 39 safe hours as drawn, white roof coating +52, roof insulation +41, shutting windows at night −35).
 4. **Web server check**: Run `python run_server.py` and verify `GET http://127.0.0.1:8000/api/health` returns `{"status": "ok"}`.
 
 ---
@@ -62,6 +66,7 @@ There is no `pytest` suite yet; verification uses dedicated check scripts and AP
 ## 3. Conventions
 
 - **Units**: Use SI units throughout all code and data (`°C`, `m`, `m²`, `W/m·K`, `kg/m³`, `J/kg·K`, `%`, `ACH`). Only `oasis/metrics.py:heat_index_c` converts to `°F` internally for the US NWS regression formula and converts back to `°C` before returning.
+- **Weather and spin-up**: `config.EPW` is the recorded heatwave; default runs start at `config.SPINUP_START` and `simulate.run` drops the spin-up rows, so every reader sees 168 rows from 00:00 on 1 May. `config.TMYX_EPW` is the typical year (template for station files, comparison only). Calibration runs set their own dates and are not trimmed.
 - **EnergyPlus execution**:
   - `config.ENERGYPLUS` (`r"D:\IAAC\ENERGY PLUS\energyplus.exe"`) contains a space; always pass it as the first element of a command list to `subprocess.run`, never as an unquoted shell string.
   - Always set `cwd=run_dir` in `subprocess.run` so EnergyPlus temporary files do not collide across parallel runs.
@@ -74,7 +79,7 @@ There is no `pytest` suite yet; verification uses dedicated check scripts and AP
   - Construction material layers in `oasis/build_idf.py` are always listed **from outside to inside**.
 - **Visible assumptions & parameters**:
   - Keep modelling constants explicit (`SAFE_LIMIT_C = 41.0` and the ASHRAE 55 fan settings in `oasis/metrics.py`; calibrated `DEFAULTS` in `oasis/build_idf.py`, from `calibrate_homes.py --airflow afn`).
-  - Use `setting(p, key)` in `oasis/build_idf.py` for calibration-tunable parameters (`airflow_factor`, `infiltration_ach`, `appliances_peak_w`, `internal_mass_m2`, `windows_open_hour`, `windows_close_hour`) so calibration scripts can test overrides via parameter dicts without silently mutating baseline defaults.
+  - Use `setting(p, key)` in `oasis/build_idf.py` for calibration-tunable parameters (`airflow_factor`, `infiltration_ach`, `appliances_peak_w`, `internal_mass_m2`, `windows_open_hour`, `windows_close_hour`, `openable_fraction`) so calibration scripts can test overrides via parameter dicts without silently mutating baseline defaults.
 - **Code style & file hygiene**:
   - Write straightforward, well-commented Python with short functions and minimal dependencies.
   - Keep `outputs/` reproducible (safe to delete and regenerate). Clean up temporary simulation directories (`outputs/live_runs/<batch>`, `outputs/sweep_runs`, `outputs/calibration/runs`) using `shutil.rmtree(..., ignore_errors=True)`.

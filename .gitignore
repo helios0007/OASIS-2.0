@@ -15,6 +15,7 @@ outputs/baseline/
 outputs/cool_roof/
 outputs/roof_insul/
 outputs/shade_nightvent/
+outputs/shading/
 outputs/*.idf
 *.eso
 *.audit

@@ -1,0 +1,130 @@
+{
+  "week": {
+    "start": "2024-05-01",
+    "end": "2024-05-07"
+  },
+  "run": {
+    "start": "2024-04-24",
+    "end": "2024-05-07",
+    "spinup_days": 7
+  },
+  "week_stats": {
+    "year": 2024,
+    "start": "2024-05-01",
+    "end": "2024-05-07",
+    "mean_heat_index_c": 45.1,
+    "mean_daily_max_c": 38.9,
+    "mean_temp_c": 33.5,
+    "mean_rh_pct": 72.0
+  },
+  "typical_year_week": {
+    "start": "05-10",
+    "end": "05-16",
+    "mean_heat_index_c": 36.5,
+    "mean_temp_c": 33.3,
+    "mean_rh_pct": 49.0
+  },
+  "hours_needed": 336,
+  "hours_from_station": 336,
+  "hours_still_missing": 0,
+  "station_minus_era5": {
+    "temp_bias_c": 0.77,
+    "rh_bias_pct": -1.0
+  },
+  "sources": {
+    "station": "https://bulk.meteostat.net/v2/hourly/43279.csv.gz (WMO 43279, Meteostat)",
+    "sunlight": "ERA5 via https://archive-api.open-meteo.com (shortwave_radiation)"
+  },
+  "ranking_by_year": [
+    {
+      "year": 2024,
+      "start": "2024-05-01",
+      "end": "2024-05-07",
+      "mean_heat_index_c": 45.1,
+      "mean_daily_max_c": 38.9,
+      "mean_temp_c": 33.5,
+      "mean_rh_pct": 72.0
+    },
+    {
+      "year": 2023,
+      "start": "2023-05-14",
+      "end": "2023-05-20",
+      "mean_heat_index_c": 43.9,
+      "mean_daily_max_c": 39.5,
+      "mean_temp_c": 33.3,
+      "mean_rh_pct": 70.0
+    },
+    {
+      "year": 2020,
+      "start": "2020-05-22",
+      "end": "2020-05-28",
+      "mean_heat_index_c": 43.5,
+      "mean_daily_max_c": 38.3,
+      "mean_temp_c": 32.9,
+      "mean_rh_pct": 73.0
+    },
+    {
+      "year": 2022,
+      "start": "2022-04-30",
+      "end": "2022-05-06",
+      "mean_heat_index_c": 43.4,
+      "mean_daily_max_c": 38.0,
+      "mean_temp_c": 32.3,
+      "mean_rh_pct": 77.0
+    },
+    {
+      "year": 2019,
+      "start": "2019-05-24",
+      "end": "2019-05-30",
+      "mean_heat_index_c": 43.2,
+      "mean_daily_max_c": 39.3,
+      "mean_temp_c": 33.3,
+      "mean_rh_pct": 68.0
+    },
+    {
+      "year": 2025,
+      "start": "2025-05-10",
+      "end": "2025-05-16",
+      "mean_heat_index_c": 42.0,
+      "mean_daily_max_c": 36.9,
+      "mean_temp_c": 32.5,
+      "mean_rh_pct": 72.0
+    },
+    {
+      "year": 2017,
+      "start": "2017-05-14",
+      "end": "2017-05-20",
+      "mean_heat_index_c": 41.6,
+      "mean_daily_max_c": 41.7,
+      "mean_temp_c": 34.3,
+      "mean_rh_pct": 58.0
+    },
+    {
+      "year": 2018,
+      "start": "2018-05-26",
+      "end": "2018-06-01",
+      "mean_heat_index_c": 41.3,
+      "mean_daily_max_c": 38.0,
+      "mean_temp_c": 33.1,
+      "mean_rh_pct": 66.0
+    },
+    {
+      "year": 2016,
+      "start": "2016-04-21",
+      "end": "2016-04-27",
+      "mean_heat_index_c": 40.9,
+      "mean_daily_max_c": 38.1,
+      "mean_temp_c": 32.7,
+      "mean_rh_pct": 68.0
+    },
+    {
+      "year": 2021,
+      "start": "2021-05-13",
+      "end": "2021-05-19",
+      "mean_heat_index_c": 38.2,
+      "mean_daily_max_c": 36.5,
+      "mean_temp_c": 31.6,
+      "mean_rh_pct": 69.0
+    }
+  ]
+}

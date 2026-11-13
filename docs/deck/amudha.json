@@ -1,0 +1,68 @@
+[
+ {
+  "name": "Amudha Elite 1BHK (636 sq ft), top floor",
+  "household": 42,
+  "nights": 26,
+  "rooms": "bedroom 53 h \u00b7 living 35 h \u00b7 kitchen 0 \u00b7 toilet 0 (no fan)",
+  "changes": [
+   {
+    "name": "As drawn",
+    "hours": 42,
+    "gain": 0
+   },
+   {
+    "name": "White roof",
+    "hours": 84,
+    "gain": 42
+   },
+   {
+    "name": "Roof insulation",
+    "hours": 74,
+    "gain": 32
+   },
+   {
+    "name": "0.6 m overhangs",
+    "hours": 45,
+    "gain": 3
+   },
+   {
+    "name": "Windows shut at night",
+    "hours": 4,
+    "gain": -38
+   }
+  ]
+ },
+ {
+  "name": "Amudha Elite 3BHK (1,208 sq ft), top floor",
+  "household": 33,
+  "nights": 11,
+  "rooms": "bedrooms 80 / 62 / 34 h \u00b7 living 47 h \u00b7 kitchen, toilets, pooja 0",
+  "changes": [
+   {
+    "name": "As drawn",
+    "hours": 33,
+    "gain": 0
+   },
+   {
+    "name": "White roof",
+    "hours": 76,
+    "gain": 43
+   },
+   {
+    "name": "Roof insulation",
+    "hours": 66,
+    "gain": 33
+   },
+   {
+    "name": "0.6 m overhangs",
+    "hours": 34,
+    "gain": 1
+   },
+   {
+    "name": "Windows shut at night",
+    "hours": 9,
+    "gain": -24
+   }
+  ]
+ }
+]

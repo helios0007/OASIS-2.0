@@ -56,7 +56,10 @@ def main():
     SWEEP_DIR.mkdir(parents=True, exist_ok=True)
     start = time.time()
 
-    with ProcessPoolExecutor(max_workers=os.cpu_count()) as pool:
+    # Each worker loads scipy/pythermalcomfort; one per CPU (24) exhausted the
+    # Windows paging file, so cap it (OASIS_WORKERS overrides).
+    workers = int(os.environ.get("OASIS_WORKERS", min(os.cpu_count(), 8)))
+    with ProcessPoolExecutor(max_workers=workers) as pool:
         results = list(pool.map(run_one, designs, chunksize=8))
 
     rows = [r for r, _ in results]
