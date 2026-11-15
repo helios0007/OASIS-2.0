@@ -1,0 +1,272 @@
+<title>OASIS Pipelines</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column. Pipeline 1 is a numbered vertical run (three "prepared once" cards feeding seven live steps);
+   pipeline 2 is the full tool as inputs / process / outputs, every item carrying a built / partly / planned state. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --fg: #15181d; --fg-2: #505863; --line: #dfe3e8;
+  --accent: #e8590c; --accent-soft: #fdebdf;
+  --built: #1b7f4b; --built-bg: #e2f4ea; --part: #9a6200; --part-bg: #fbefd2; --plan: #5d6672; --plan-bg: #eceff2;
+  --display: "Poppins", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #101216; --panel: #181b21; --fg: #eceef1; --fg-2: #a3abb6; --line: #2b3038;
+  --accent: #ff8a3d; --accent-soft: #3a2415;
+  --built: #5fd396; --built-bg: #143524; --part: #f0bb55; --part-bg: #3a2c0e; --plan: #a3abb6; --plan-bg: #262b33;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #101216; --panel: #181b21; --fg: #eceef1; --fg-2: #a3abb6; --line: #2b3038;
+  --accent: #ff8a3d; --accent-soft: #3a2415;
+  --built: #5fd396; --built-bg: #143524; --part: #f0bb55; --part-bg: #3a2c0e; --plan: #a3abb6; --plan-bg: #262b33;
+  color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font: 400 15px/1.55 var(--body); }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 36px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 22px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; }
+h1 { font-size: 30px; line-height: 1.2; }
+h2 { font-size: 22px; line-height: 1.25; }
+h3 { font-size: 15px; line-height: 1.3; }
+p { margin: 0; }
+.lede { color: var(--fg-2); max-width: 68ch; }
+.eyebrow { font: 500 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+code { font: 400 12.5px var(--mono); color: var(--fg-2); overflow-wrap: anywhere; }
+section { display: flex; flex-direction: column; gap: 16px; margin-top: 18px; }
+.sub { font: 500 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); margin-top: 6px; }
+
+/* headline figures */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0; border-block: 1px solid var(--line); }
+.facts div { padding: 14px 16px 14px 0; }
+.facts b { display: block; font: 600 24px var(--display); font-variant-numeric: tabular-nums; }
+.facts span { color: var(--fg-2); font-size: 13px; }
+
+/* pipeline 1: prepared once */
+.prep { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.card p { font-size: 14px; color: var(--fg-2); }
+.card .gives { font-size: 13px; color: var(--fg); border-top: 1px dashed var(--line); padding-top: 8px; margin-top: auto; }
+.gives b, .out b { font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-right: 6px; }
+.feeds { text-align: center; color: var(--fg-2); font: 500 12px var(--mono); letter-spacing: .06em; }
+
+/* pipeline 1: every run */
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.step { display: grid; grid-template-columns: 44px minmax(0, 1fr); column-gap: 14px; }
+.rail { display: flex; flex-direction: column; align-items: center; }
+.num { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: #fff; font: 600 15px var(--display);
+  display: grid; place-items: center; flex: none; }
+.rail i { flex: 1; width: 2px; background: var(--line); margin-block: 4px; }
+.step:last-child .rail i { display: none; }
+.body { padding-bottom: 22px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.body h3 { padding-top: 6px; font-size: 16px; }
+.body p { color: var(--fg-2); max-width: 74ch; }
+.body ul { margin: 0; padding-left: 18px; color: var(--fg-2); max-width: 74ch; }
+.body li { margin-block: 2px; }
+.body .out { color: var(--fg); font-size: 14px; background: var(--accent-soft); border-radius: 4px; padding: 7px 10px; max-width: 74ch; }
+
+/* pipeline 2 */
+.layers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--fg-2); align-items: center; }
+.pill { font: 500 11px var(--mono); letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.pill.built { color: var(--built); background: var(--built-bg); }
+.pill.part { color: var(--part); background: var(--part-bg); }
+.pill.plan { color: var(--plan); background: var(--plan-bg); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; align-items: start; }
+.col { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.col h3 { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.col h3 small { display: block; font: 400 12.5px var(--body); color: var(--fg-2); margin-top: 2px; }
+.item { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 4px 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); align-items: start; }
+.item:last-child { border-bottom: 0; }
+.item .k { font: 500 12px var(--mono); color: var(--fg-2); padding-top: 2px; }
+.item .n { font-weight: 600; font-size: 14px; }
+.item .d { grid-column: 2 / 4; font-size: 13px; color: var(--fg-2); }
+.next { margin: 0; padding-left: 20px; color: var(--fg-2); max-width: 74ch; }
+.next li { margin-block: 4px; }
+.next b { color: var(--fg); font-weight: 600; }
+footer { color: var(--fg-2); font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:10px">
+    <span class="eyebrow">OASIS 2.0 · thesis tool · state on 15 November 2026</span>
+    <h1>How OASIS works now, and the full tool it is the first part of</h1>
+    <p class="lede">OASIS predicts how many hours of a recorded Chennai heatwave week a home without AC stays safe for the people in it, with a daily power cut that stops the ceiling fans, and which design changes add safe hours. The first pipeline is the tool as it runs today (the MVP). The second is the complete thesis tool, with each part marked built, partly built or planned.</p>
+  </header>
+
+  <div class="facts">
+    <div><b>59 / 168 h</b><span>safe hours, baseline top-floor room, 1–7 May 2024</span></div>
+    <div><b>41 °C</b><span>heat index limit that defines a safe hour</span></div>
+    <div><b>1.10 °C</b><span>hourly error against monitored Dhaka homes</span></div>
+    <div><b>6,036</b><span>EnergyPlus designs behind the AI estimate</span></div>
+  </div>
+
+  <!-- ===================== PIPELINE 1 ===================== -->
+  <section>
+    <span class="eyebrow">Pipeline 1</span>
+    <h2>The tool as it runs today</h2>
+    <p class="lede">Three things are prepared once and reused by every run: the weather, the calibrated physics and the AI estimate. After that, each assessment goes through the same seven steps.</p>
+
+    <div class="sub">Prepared once</div>
+    <div class="prep">
+      <div class="card">
+        <h3>A · Weather of a real heatwave</h3>
+        <p>Hourly records from the Meenambakkam airport station plus ERA5 sunlight. The week is the hottest of April–June 2016–2025 by outdoor heat index: 1–7 May 2024. Two more outdoor-air cases are made from it: city centre (measured Nungambakkam offsets) and street with AC waste heat (+1 °C at night, from literature).</p>
+        <code>get_heatwave.py · check_city_weather.py · oasis/ac_heat.py · oasis/scenario.py</code>
+        <div class="gives"><b>Gives</b>three weather files: airport, city centre, street AC</div>
+      </div>
+      <div class="card">
+        <h3>B · Physics fitted to measured homes</h3>
+        <p>One model per monitored Dhaka home, built from its survey (Tasgaonkar et al. 2022). 1,440 runs fix what no survey or standard gives: internal mass 320 m², appliances 100 W, wall leakage 8 cm²/m², air moved by the AirflowNetwork. Checked on Delhi homes without refitting.</p>
+        <code>calibrate_homes.py --airflow afn · check_evening.py · check_lag.py</code>
+        <div class="gives"><b>Gives</b>the default settings in <code>oasis/build_idf.py</code></div>
+      </div>
+      <div class="card">
+        <h3>C · Sweeps and the AI estimate</h3>
+        <p>Every combination of the design choices is simulated for each outdoor-air case (3 × 1,512 runs), plus 1,500 random rooms of other sizes and orientations. XGBoost learns safe hours and heat dose from them. Error on designs it has not seen: 1.5 h on the grid, 5.2 h on random rooms.</p>
+        <code>run_sweep.py · run_sample.py · train_surrogate.py · oasis/surrogate.py</code>
+        <div class="gives"><b>Gives</b>stored results for the static tool, and an instant estimate</div>
+      </div>
+    </div>
+    <div class="feeds">▼ used by every run ▼</div>
+
+    <div class="sub">Every run</div>
+    <ol class="steps">
+      <li class="step"><div class="rail"><span class="num">1</span><i></i></div>
+        <div class="body"><h3>Describe the home, the people and the scenario</h3>
+          <ul>
+            <li><b>Home</b>, one of three ways: typed choices (size, orientation, floor, wall, roof, roof colour, window share, overhang, windows at night); a Rhino <code>.3dm</code> of one room; or a room-by-room plan drawn on <code>OASIS::</code> layers (the two Amudha Elite flats are bundled).</li>
+            <li><b>People</b>: each person's age, sex and daily routine by room.</li>
+            <li><b>Scenario</b>: outdoor air (airport / city centre / street AC) and the power cut (start hour, length 1 / 4 / 10 / 24 h, or none).</li>
+          </ul>
+          <p>While the design is changed but not yet run, the web tool shows the AI estimate for a single room.</p>
+          <code>frontend/ · app.py · oasis/from_rhino.py · oasis/read_layout_3dm.py · /api/predict</code>
+          <div class="out"><b>Hands on</b>one set of design parameters, or a plan with rooms, walls, doors and openings</div></div></li>
+
+      <li class="step"><div class="rail"><span class="num">2</span><i></i></div>
+        <div class="body"><h3>Write the EnergyPlus models</h3>
+          <p>The model file is written from scratch in Python, with no template. A single room is one zone; a plan gets one zone per room, real partitions and doors, and shared walls with no sun or wind. The design is written once as drawn and once for every single change that can be made to it (8 models for the baseline room). Files are written one after another because the writer library is not thread-safe.</p>
+          <code>oasis/build_idf.py · oasis/build_layout.py · oasis/assess.py:single_changes</code>
+          <div class="out"><b>Hands on</b>a set of <code>.idf</code> models that differ by one choice each</div></div></li>
+
+      <li class="step"><div class="rail"><span class="num">3</span><i></i></div>
+        <div class="body"><h3>Simulate the heatwave</h3>
+          <p>EnergyPlus 26.2 runs the models side by side, up to 8 at a time. Each run starts on 24 April so the walls and roof are already warm, and the seven spin-up days are dropped. Any severe error in the EnergyPlus log stops the run.</p>
+          <code>oasis/simulate.py · config.py</code>
+          <div class="out"><b>Hands on</b>168 hourly rows per model: indoor air and radiant temperature, humidity, outdoor air</div></div></li>
+
+      <li class="step"><div class="rail"><span class="num">4</span><i></i></div>
+        <div class="body"><h3>Turn temperatures into felt heat and safe hours</h3>
+          <ul>
+            <li><b>Heat index</b> (US NWS) every hour from indoor air temperature and humidity.</li>
+            <li><b>Ceiling fan</b>: the ASHRAE 55 cooling effect, about 2 °C, is taken off every hour, except in the power-cut hours.</li>
+            <li><b>Safe hours</b>: hours of the week with felt heat index below 41 °C. This is the headline.</li>
+            <li><b>Heat dose</b> beside it: felt heat above 27 °C summed over the week, against 850 °C·h (elderly) and 1,174 °C·h (young adults) from Chen et al. 2024.</li>
+            <li><b>Cross-check</b> with the extended heat index (Lu &amp; Romps 2022), and the two peaks: the daily one and the one during the cut.</li>
+          </ul>
+          <p>A plan is scored where the people are: the living room by day, the hottest bedroom at night.</p>
+          <code>oasis/metrics.py · oasis/unit.py</code>
+          <div class="out"><b>Hands on</b>safe hours, cut hours in danger, peak heat index and heat dose for every model</div></div></li>
+
+      <li class="step"><div class="rail"><span class="num">5</span><i></i></div>
+        <div class="body"><h3>Rank the changes, build packages, price them</h3>
+          <p>Each single change is ranked by safe hours gained over the design as drawn. Packages are then built step by step: start from the best change, simulate it with each remaining change added, keep the one that reaches most safe hours, up to three. Packages are always simulated, never added up, because changes overlap. Each change and package gets a cost: rate × the home's own roof, wall and window areas, minus the choice it replaces.</p>
+          <code>oasis/assess.py · oasis/costs.py</code>
+          <div class="out"><b>Hands on</b>ranked changes and packages with safe hours gained, ₹, and hours per ₹1,000</div></div></li>
+
+      <li class="step"><div class="rail"><span class="num">6</span><i></i></div>
+        <div class="body"><h3>Check the result on bodies</h3>
+          <p>Each adult is run hour by hour through the JOS-3 body model with the room's air, radiant temperature and humidity. Core temperature below 38 °C counts as safe. The tool reports how many hours the heat index and the bodies agree. Children have no validated body model and are covered by the heat index only.</p>
+          <code>oasis/agents.py</code>
+          <div class="out"><b>Hands on</b>core and skin temperature per person per hour, and the agreement with the heat index</div></div></li>
+
+      <li class="step"><div class="rail"><span class="num">7</span><i></i></div>
+        <div class="body"><h3>Show it</h3>
+          <ul>
+            <li><b>Web tool</b> (live): 3D view of the home, week timeline, and four tabs: Summary, Interventions, People, Basis. Basis lists every input as measured, calibrated, standard or chosen.</li>
+            <li><b>Streamlit app</b> (live): the same run with a simpler layout.</li>
+            <li><b>Static page</b> (no EnergyPlus): looks the design up in the stored sweeps.</li>
+            <li><b>Command line</b>: one Rhino file in, safe hours and ranked changes out.</li>
+          </ul>
+          <code>run_server.py + backend/main.py + frontend/ · app.py · make_tool.py · run_rhino.py</code>
+          <div class="out"><b>Hands on</b>an answer in about 20–30 seconds for a live run</div></div></li>
+    </ol>
+  </section>
+
+  <!-- ===================== PIPELINE 2 ===================== -->
+  <section>
+    <span class="eyebrow">Pipeline 2</span>
+    <h2>The full tool, and how much of it the MVP covers</h2>
+    <p class="lede">The complete tool has two layers. The city layer says where heat risk is highest and passes the local conditions down. The home layer, which is this thesis, says how long a home stays safe and what fixes it. Inputs flow through nine process steps to the outputs.</p>
+
+    <div class="layers">
+      <div class="card"><h3>Layer 0 · neighbourhood and city <span class="pill plan">Planned for Chennai</span></h3>
+        <p>HVRA 1.0: heat vulnerability per building, urban heat island, neighbour shading, street microclimate. It exists for Barcelona; the cadastre and census loaders need Indian sources.</p>
+        <div class="gives"><b>Passes down</b>local air temperature, shading, wind and a vulnerability score per building</div></div>
+      <div class="card"><h3>Layer 1 · building, flat and room <span class="pill part">MVP running</span></h3>
+        <p>OASIS: safe hours in a heatwave with a power cut, and the design changes that add them. Today it stands on measured airport and city-centre weather in place of Layer 0.</p>
+        <div class="gives"><b>Answers</b>how long is this home safe, and what change fixes it at the least cost</div></div>
+    </div>
+
+    <div class="legend">
+      <span><span class="pill built">Built</span> works in the tool today</span>
+      <span><span class="pill part">Partly</span> a first version exists</span>
+      <span><span class="pill plan">Planned</span> not started</span>
+    </div>
+
+    <div class="cols">
+      <div class="col">
+        <h3>Inputs<small>what the user or the tool supplies</small></h3>
+        <div class="item"><span class="k">A</span><span class="n">Location and climate</span><span class="pill part">Partly</span><span class="d">Chennai only, recorded heatwave, three outdoor-air cases. No map picker, no future climate.</span></div>
+        <div class="item"><span class="k">B</span><span class="n">Home geometry</span><span class="pill part">Partly</span><span class="d">Typed choices, Rhino room, room-by-room plan. No IFC, no plan image or DXF.</span></div>
+        <div class="item"><span class="k">C</span><span class="n">Envelope and materials</span><span class="pill part">Partly</span><span class="d">Three walls, four roof build-ups, roof colour, overhang. One glass type, no defaults by construction year.</span></div>
+        <div class="item"><span class="k">D</span><span class="n">Place in the building</span><span class="pill part">Partly</span><span class="d">Top or middle floor; shared walls in plans. No corridors, shafts or courtyards.</span></div>
+        <div class="item"><span class="k">E</span><span class="n">Urban context</span><span class="pill plan">Planned</span><span class="d">Comes from Layer 0. Stand-in today: city-centre and street-AC air cases.</span></div>
+        <div class="item"><span class="k">F</span><span class="n">Occupants</span><span class="pill part">Partly</span><span class="d">Age, sex and routine per person. No health or mobility details; children have no body model.</span></div>
+        <div class="item"><span class="k">G</span><span class="n">Systems and backup power</span><span class="pill part">Partly</span><span class="d">Ceiling fan only. No AC, coolers, inverter battery, solar or cooking heat.</span></div>
+        <div class="item"><span class="k">H</span><span class="n">Grid and power cuts</span><span class="pill part">Partly</span><span class="d">A chosen start hour and length. No measured outage statistics for the feeder.</span></div>
+        <div class="item"><span class="k">I</span><span class="n">Behaviour</span><span class="pill part">Partly</span><span class="d">Windows open or shut at night. No curtains, roof wetting or sleeping on the terrace.</span></div>
+        <div class="item"><span class="k">J</span><span class="n">Cost and constraints</span><span class="pill part">Partly</span><span class="d">Cost per change, two published rates and the rest estimates. No budget, tenure or new-versus-existing mode.</span></div>
+      </div>
+
+      <div class="col">
+        <h3>Process<small>what happens to the inputs</small></h3>
+        <div class="item"><span class="k">1</span><span class="n">Intake and defaults</span><span class="pill part">Partly</span><span class="d">Reads the three geometry inputs and fills the baseline. No lookup by era or climate zone.</span></div>
+        <div class="item"><span class="k">2</span><span class="n">Urban grounding</span><span class="pill plan">Planned</span><span class="d">Adjust the weather with Layer 0. Today the weather file is shifted by measured station offsets.</span></div>
+        <div class="item"><span class="k">3</span><span class="n">Build the thermal model</span><span class="pill built">Built</span><span class="d">Single room and multi-room models, calibrated physics.</span></div>
+        <div class="item"><span class="k">4</span><span class="n">Scenario</span><span class="pill part">Partly</span><span class="d">Recorded heatwave and a chosen cut. No AC or backup schedules.</span></div>
+        <div class="item"><span class="k">5</span><span class="n">Simulate</span><span class="pill built">Built</span><span class="d">EnergyPlus for the result, the AI estimate before a run.</span></div>
+        <div class="item"><span class="k">6</span><span class="n">Assess</span><span class="pill built">Built</span><span class="d">Safe hours per room and household, heat dose, body check per adult.</span></div>
+        <div class="item"><span class="k">7</span><span class="n">Intervene</span><span class="pill part">Partly</span><span class="d">Five kinds of change. The full catalogue of 10–15 measures with feasibility filters is not there.</span></div>
+        <div class="item"><span class="k">8</span><span class="n">Re-simulate and rank</span><span class="pill built">Built</span><span class="d">Every change and package is simulated on the same week and ranked.</span></div>
+        <div class="item"><span class="k">9</span><span class="n">Verify</span><span class="pill part">Partly</span><span class="d">Fitted on Dhaka, checked on Delhi. Chennai homes are planned for the 2027 field campaign.</span></div>
+      </div>
+
+      <div class="col">
+        <h3>Outputs<small>what the user gets</small></h3>
+        <div class="item"><span class="k">O1</span><span class="n">Safe hours</span><span class="pill built">Built</span><span class="d">Per room and for the household, with heat dose beside it.</span></div>
+        <div class="item"><span class="k">O2</span><span class="n">Danger timeline</span><span class="pill built">Built</span><span class="d">Hourly felt heat for the week with the cut hours marked.</span></div>
+        <div class="item"><span class="k">O3</span><span class="n">Ranked changes with cost</span><span class="pill part">Partly</span><span class="d">Safe hours gained and hours per ₹1,000 in the web tool. Most rates still unchecked.</span></div>
+        <div class="item"><span class="k">O4</span><span class="n">Backup sizing</span><span class="pill plan">Planned</span><span class="d">Battery needed to keep fans running through a cut.</span></div>
+        <div class="item"><span class="k">O5</span><span class="n">Evening peak load avoided</span><span class="pill plan">Planned</span><span class="d">For homes with AC; for utilities and policy.</span></div>
+        <div class="item"><span class="k">O6</span><span class="n">Code check</span><span class="pill plan">Planned</span><span class="d">Eco-Niwas Samhita compliance and a "passes code but unsafe" flag.</span></div>
+        <div class="item"><span class="k">O7</span><span class="n">Design guidelines</span><span class="pill plan">Planned</span><span class="d">Per climate, building type and floor, with a redesigned PMAY case.</span></div>
+        <div class="item"><span class="k">O8</span><span class="n">City map of vulnerable buildings</span><span class="pill plan">Planned</span><span class="d">From Layer 0.</span></div>
+        <div class="item"><span class="k">O9</span><span class="n">Uncertainty range</span><span class="pill part">Partly</span><span class="d">Model error and a second heat index are reported. No ± band on safe hours yet.</span></div>
+      </div>
+    </div>
+
+    <div class="sub">Largest gaps between the MVP and the full tool</div>
+    <ol class="next">
+      <li><b>Chennai measurements.</b> The physics is fitted on Dhaka homes. The 2027 field campaign should log indoor conditions, window opening times and street air beside AC units.</li>
+      <li><b>Urban layer.</b> Replace the two stand-in air cases with Layer 0 output for the building's own street.</li>
+      <li><b>Systems and backup.</b> AC, inverter batteries and cooking heat, which lead to backup sizing and peak load.</li>
+      <li><b>Costs and catalogue.</b> Check the estimate rates against the Tamil Nadu PWD schedule and widen the list of measures.</li>
+      <li><b>Regulation and guidance.</b> The code check and the design guidelines are the outputs meant for architects.</li>
+    </ol>
+  </section>
+
+  <footer>Sources: <code>HANDOFF.md</code>, <code>AGENTS.md</code> and the code for pipeline 1; <code>OASIS_TOOL_INPUTS.md</code> for the full-tool inputs, process and outputs. The built / partly / planned marks are a reading of the code on 15 November 2026.</footer>
+</div>

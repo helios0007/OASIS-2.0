@@ -715,6 +715,23 @@ function renderTrail() {
 }
 
 // ----- Interventions -------------------------------------------------------
+// Cost of a change or package (oasis/costs.py): "₹9,000 · 4.3 h per ₹1,000".
+// "est." marks a rate that is not yet checked against a schedule of rates.
+function costText(c) {
+  if (c.cost_inr === null || c.cost_inr === undefined) return "";
+  const rupees = n => `₹${Math.abs(n).toLocaleString("en-IN")}`, est = c.cost_is_estimate ? " (est.)" : "";
+  if (c.cost_inr === 0) return " · no extra cost";
+  if (c.cost_inr < 0) return ` · saves ${rupees(c.cost_inr)}${est}`;
+  return ` · ${rupees(c.cost_inr)}${est}` + (c.safe_hours_per_1000_inr ? ` · ${c.safe_hours_per_1000_inr} h per ₹1,000` : "");
+}
+// The change that buys the most safe hours per rupee (free changes that gain hours come first)
+function bestValue(list) {
+  const value = c => c.safe_hours_gained <= 0 || c.cost_inr === null || c.cost_inr === undefined ? -1
+    : c.cost_inr <= 0 ? Infinity : c.safe_hours_per_1000_inr;
+  const best = list.reduce((a, c) => value(c) > value(a) ? c : a, list[0]);
+  return value(best) > 0 ? best : null;
+}
+
 function renderChanges() {
   const list = result.changes;
   if (!list.length) {
@@ -723,12 +740,12 @@ function renderChanges() {
     return;
   }
   const maxGain = Math.max(1, ...list.map(c => Math.abs(c.safe_hours_gained)));
-  const helpful = list.filter(c => c.safe_hours_gained > 0).length;
+  const helpful = list.filter(c => c.safe_hours_gained > 0).length, value = bestValue(list);
   const shown = showAll ? list : list.slice(0, Math.max(1, Math.min(TOP_CHANGES, helpful || 1)));
   $("changes").innerHTML = shown.map((c, i) => {
     const g = c.safe_hours_gained;
     return `<li class="change${preview === c ? " on" : ""}" data-i="${list.indexOf(c)}" title="Click to compare in the timeline">
-      <span class="what">${esc(c.title)}: ${esc(c.label)}${i === 0 && g > 0 ? `<span class="best">Best</span>` : ""}<small>now ${esc(labelOf(c.parameter, state[c.parameter]))} · ${c.safe_hours} safe h · peak ${c.max_heat_index_c} °C</small></span>
+      <span class="what">${esc(c.title)}: ${esc(c.label)}${i === 0 && g > 0 ? `<span class="best">Best</span>` : ""}${c === value ? `<span class="best">Best value</span>` : ""}<small>now ${esc(labelOf(c.parameter, state[c.parameter]))} · ${c.safe_hours} safe h · peak ${c.max_heat_index_c} °C${costText(c)}</small></span>
       <span class="gain ${g > 0 ? "up" : g < 0 ? "down" : "muted"}">${signed(g)} h</span>
       <span class="bar${g < 0 ? " neg" : ""}"><i style="width:${(Math.abs(g) / maxGain * 100).toFixed(1)}%"></i></span>
       <button type="button" class="btn btn-outline btn-sm" data-apply="${list.indexOf(c)}">Apply</button>
@@ -760,7 +777,7 @@ function renderPackages() {
     const g = k.safe_hours_gained, lost = k.sum_of_single_gains - g;
     return `<li class="change${preview === k ? " on" : ""}" data-i="${i}" title="Click to compare in the timeline">
       <span class="what">${k.changes.map(c => `${esc(c.title)}: ${esc(c.label)}`).join(" + ")}
-        <small>${k.safe_hours} safe h · peak ${k.max_heat_index_c} °C · dose ${Math.round(k.hazard_hours_ch).toLocaleString()} °C·h</small>
+        <small>${k.safe_hours} safe h · peak ${k.max_heat_index_c} °C · dose ${Math.round(k.hazard_hours_ch).toLocaleString()} °C·h${costText(k)}</small>
         <small>On their own these add up to ${signed(k.sum_of_single_gains)} h${lost > 0 ? `: ${lost} h overlap` : lost < 0 ? `: ${-lost} h more together` : ""}</small></span>
       <span class="gain ${g > 0 ? "up" : g < 0 ? "down" : "muted"}">${signed(g)} h</span>
       <span class="bar"><i style="width:${(Math.max(0, g) / maxGain * 100).toFixed(1)}%"></i></span>
@@ -1037,6 +1054,8 @@ function renderBasis() {
     row("Power cut", "Chosen", p.cut_start_hour === null || p.cut_start_hour === undefined ? "None" : p.cut_length_h >= 24 ? "No power all week" : `${pad(p.cut_start_hour)}:00–${pad((p.cut_start_hour + (p.cut_length_h || 1)) % 24)}:00 every day`, "A scenario, not a forecast: one hour is evening load shedding, the long cases follow the outage studies (Chen 2024, Shi 2025). The cut only takes the fan away. The summary also shows the worst hour of the day for a cut."),
     row("Heat dose", "Literature", `Felt heat above ${sc.dose.caution_c} °C, summed: ${Math.round(s.hazard_hours_ch).toLocaleString()} °C·h this week`, `Chen et al. 2024: illness likely above ${sc.dose.elderly_ch} °C·h (elderly) and ${sc.dose.young_ch.toLocaleString()} °C·h (young adults), or a peak near ${sc.dose.hi_max_c} °C. From a body model in a 7-day Guangzhou outage; not checked on Indian occupants. Here the fan's cooling effect is already taken off the felt heat.`),
     row("Safe limit", "Chosen", `Heat index below ${sc.safe_limit_c} °C`, `US NWS “Danger” band. Cross-check with the extended heat index (Lu &amp; Romps 2022): ${s.safe_hours_extended_hi ?? "–"} safe hours, peak ${s.max_extended_hi_c ?? "–"} °C. The NWS value is the more cautious count.`),
+    ...(result.cost_basis && result.cost_basis.length ? [row("Costs", "Estimate", "Extra cost of each change on this home, new build",
+      `Rate × the home's own roof, wall and window areas, minus the choice it replaces. In a plan, walls shared with a neighbour count half. Published: cool roof ₹300/m² (Telangana Cool Roof Policy 2023–28), 50 mm insulation board ₹1,005/m² (CPWD DSR 2023). Walls, overhang, mesh, lime wash and the screed over the insulation are market estimates, not yet checked against the Tamil Nadu PWD rates. Changes stay ranked by safe hours.`)] : []),
     row("Constructions", "Standard", `Wall U ${wall.u_value} · roof U ${roof.u_value} W/m²K · glass U ${ph.glass_u}`, `Wall ${wall.heat_capacity_kj} and roof ${roof.heat_capacity_kj} kJ/m²K heat capacity. Material values from BIS SP 41.`),
   ];
   const cityLine = city ? `Chennai's city-centre station is ${signed(city.season.dawn_0530_d_temp_c)} °C vs the airport at dawn and ${signed(city.season.afternoon_1430_d_temp_c)} °C at 14:30 (Apr–Jun 2016–25), with ${Math.round(city.season.wind_ratio_mean * 100)} % of its wind.` : "";

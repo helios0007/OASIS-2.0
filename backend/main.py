@@ -34,6 +34,8 @@ from oasis.agents import (
 )
 from oasis import scenario
 from oasis.assess import assess, assess_packages, single_changes
+from oasis import costs
+from oasis import outages
 from oasis.box_view import box_unit
 from oasis.build_idf import (
     ACTIVITY_W, APPLIANCES_PEAK_W, GLASS_SHGC, GLASS_U,
@@ -45,7 +47,7 @@ from oasis.metrics import (BANDS, CAUTION_C, DOSE_LIMIT_ELDERLY_CH, DOSE_LIMIT_Y
                            FAN_CREDIT_C, HI_MAX_LIMIT_C, SAFE_LIMIT_C, cut_hours_list, peaks)
 from oasis.params import BASELINE, SWEEP_LEVELS
 from oasis import surrogate
-from oasis.unit import assess_plan
+from oasis.unit import assess_plan, plan_geometry
 
 app = FastAPI(title="OASIS 2.0 Workbench")
 
@@ -164,6 +166,8 @@ def options():
             "cut_end_hour": config.CUT_END_HOUR,
             "safe_limit_c": SAFE_LIMIT_C,
             "cut_lengths": scenario.CUT_LENGTHS,
+            # measured outage profile (get_outages.py); None until the ESMI files are supplied
+            "measured_outages": outages.measured(),
             "dose": {"caution_c": CAUTION_C, "elderly_ch": DOSE_LIMIT_ELDERLY_CH,
                      "young_ch": DOSE_LIMIT_YOUNG_CH, "hi_max_c": HI_MAX_LIMIT_C,
                      "bands": [{"key": k, "from_c": None if lo == float("-inf") else lo} for k, lo in BANDS]},
@@ -330,8 +334,12 @@ def series(hourly):
             "humidity": hourly["rh_in"].round(0).tolist()}
 
 
-def response(summary, hourly, changes, agents_out, check, unit, packages, p, scen):
-    """What the front end gets back from /api/assess."""
+def response(summary, hourly, changes, agents_out, check, unit, packages, p, scen, areas=None):
+    """What the front end gets back from /api/assess.
+    areas: roof / wall / window areas for the costs (oasis.costs); default the
+    single room p, a room-by-room plan passes its own (costs.plan_quantities)."""
+    def cost(parts, gain):
+        return costs.cost_fields(p, [(c["parameter"], c["value"]) for c in parts], gain, areas)
     unit["design"] = {k: p[k] for k in ("floor", "roof", "roof_solar_absorptance", "wall", "shading_depth_m")}
     return {
         "summary": summary,
@@ -348,6 +356,7 @@ def response(summary, hourly, changes, agents_out, check, unit, packages, p, sce
             {**{k: v for k, v in change.items() if k != "hourly"},
              "title": LABELS[change["parameter"]][0],
              "label": LABELS[change["parameter"]][1][change["value"]],
+             **cost([change], change["safe_hours_gained"]),
              **series(change["hourly"])}
             for change in changes
         ],
@@ -358,10 +367,12 @@ def response(summary, hourly, changes, agents_out, check, unit, packages, p, sce
              "label": " + ".join(LABELS[c["parameter"]][1][c["value"]] for c in pack["changes"]),
              "changes": [{**c, "title": LABELS[c["parameter"]][0],
                           "label": LABELS[c["parameter"]][1][c["value"]]} for c in pack["changes"]],
+             **cost(pack["changes"], pack["safe_hours_gained"]),
              **series(pack["hourly"])}
             for pack in packages
         ],
         "unit": unit,
+        "cost_basis": costs.basis(),
     }
 
 
@@ -379,7 +390,8 @@ def assess_plan_building(p, plan_id, party, roster, epw, scen):
             raise HTTPException(500, f"The simulation failed: {error}")
         if len(CACHE) >= CACHE_LIMIT:
             CACHE.pop(next(iter(CACHE)))
-        CACHE[key] = response(*out, p, scen)
+        areas = costs.plan_quantities(*plan_geometry(PLAN_DIR / f"{plan_id}.3dm", party))
+        CACHE[key] = response(*out, p, scen, areas)
     return CACHE[key]
 
 

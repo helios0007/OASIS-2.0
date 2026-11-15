@@ -186,5 +186,5 @@ docs/                OASIS_tool_overview.md
 - `SAFE_LIMIT_C` (41 °C) is a chosen threshold, not fitted; health-based thresholds are not adopted yet.
 - Calibrated on Dhaka, not Chennai. Appliance heat and wall leakage are only weakly fixed by the data, and the simulated daily peak (~14:00) still comes earlier than measured (17:00).
 - The body check covers adults only; no validated child thermoregulation model is used.
-- No intervention costs yet: changes are ranked by hours, not hours per rupee.
+- Intervention costs (`oasis/costs.py`) are in the web tool only (single room and room-by-room plans), and most rates are unchecked estimates (published: cool roof, insulation board). Changes stay ranked by safe hours; cost and hours per ₹1,000 are shown beside them.
 - The server has no login. It listens on 127.0.0.1 only.
