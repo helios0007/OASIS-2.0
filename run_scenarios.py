@@ -11,14 +11,17 @@ versions of the outdoor air (oasis/ac_heat.py):
     street beside AC units       airport + 1 C at night: literature upper case,
                                  not measured in Chennai (2027 street logger)
 
-Each simulation is scored three ways. EnergyPlus does not model the fan,
+Each simulation is scored five ways. EnergyPlus does not model the fan,
 so a power cut only removes the fan's cooling credit in that hour
-(oasis/metrics.py); the three cases share one simulation:
+(oasis/metrics.py); the five cases share one simulation:
 
     heatwave + power cut 20-21 h   the OASIS case (evening load shedding)
     heatwave alone                 fans work every hour
     power cut at peak heat         one-hour cut at the room's hottest hour
                                    (from the airport-weather top floor run)
+    power cut 20-06 h              no fan through the night
+    no power all week              the long outage of the outage studies
+                                   (Chen 2024, Shi 2025)
 
 Every result is also scored with the extended heat index (Lu & Romps 2022)
 as a cross-check of the NWS formula.
@@ -40,7 +43,7 @@ import pandas as pd
 import config
 from oasis.ac_heat import STREET_AC_NIGHT_C, add_ac_heat, city_centre, warming_profile
 from oasis.build_idf import build_idf
-from oasis.metrics import SAFE_LIMIT_C, heat_index_c, safe_hours
+from oasis.metrics import SAFE_LIMIT_C, cut_hours_list, heat_index_c, safe_hours
 from oasis.params import BASELINE
 from oasis.simulate import run
 from run_heatwave import INFO, SPINUP_DAYS
@@ -111,7 +114,10 @@ def main():
     peak_hour = int(h0.groupby("hour")["t_in"].mean().idxmax())
     cuts = {"heatwave + power cut 20-21 h": EVENING_CUT,
             "heatwave alone (no power cut)": [],
-            f"power cut at peak heat ({peak_hour:02d}-{peak_hour + 1:02d} h)": [peak_hour]}
+            f"power cut at peak heat ({peak_hour:02d}-{peak_hour + 1:02d} h)": [peak_hour],
+            # Long outages, as in the outage studies (Chen 2024, Shi 2025): the fan is all that changes
+            "power cut 20-06 h (through the night)": cut_hours_list(config.CUT_START_HOUR, 10),
+            "no power all week": cut_hours_list(0, 24)}
 
     rows, hourly = [], []
     for wname, dname, csv in scored:
@@ -132,7 +138,7 @@ def main():
     plot(table, OUT / "safe_hours.png")
     pd.set_option("display.width", 250)
     print(f"Room's hottest hour: {peak_hour:02d}:00")
-    print(table[["weather", "design", "power_cut", "safe_hours", "danger_hours", "nights_cut_in_danger",
+    print(table[["weather", "design", "power_cut", "safe_hours", "danger_hours", "hazard_hours_ch", "nights_cut_in_danger",
                  "cut_max_heat_index_c", "max_heat_index_c", "night_safe_hours_22_06", "safe_hours_extended_hi",
                  "mean_indoor_temp_c", "mean_outdoor_temp_c"]].to_string(index=False))
 
@@ -141,7 +147,7 @@ def plot(table, png):
     cuts = list(table["power_cut"].unique())
     weathers = list(table["weather"].unique())
     colours = ["#7f8c8d", "#2e86c1", "#16a085", "#c0392b"]
-    fig, axes = plt.subplots(1, 2, figsize=(13, 4.6), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(17, 4.6), sharey=True)
     for ax, dname in zip(axes, DESIGNS):
         d = table[table["design"] == dname]
         width = 0.8 / len(weathers)

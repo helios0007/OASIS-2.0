@@ -15,6 +15,19 @@ FAN_MET = 1.1            # seated, light activity (ASHRAE 55)
 FAN_CLO = 0.5            # light summer clothing (ASHRAE 55)
 FAN_CREDIT_C = 2.0       # display only: the cooling effect at 32 C / 70 % RH
 
+# Heat dose (Chen et al. 2024, Building and Environment 266:112089): heat-index
+# hazard hours = the sum over the hours of (heat index - 27 C) where it is above
+# the NWS "Caution" level. Heat illness is likely above these totals (their
+# 7-day outage in Guangzhou, body water loss from JOS-3 with 80 % rehydration),
+# or when the maximum heat index nears 55 C (core temperature 38 C).
+CAUTION_C = 27.0
+DOSE_LIMIT_ELDERLY_CH = 850.0
+DOSE_LIMIT_YOUNG_CH = 1174.0
+HI_MAX_LIMIT_C = 55.0
+# NWS heat index bands (lower edge, C). "Danger" starts at SAFE_LIMIT_C.
+BANDS = (("below_caution", -np.inf), ("caution", CAUTION_C), ("extreme_caution", 32.0),
+         ("danger", SAFE_LIMIT_C), ("extreme_danger", 54.0))
+
 
 def fan_credit_c(t, mrt, rh):
     """Cooling effect (C) of the fan at each hour, vs still air (0.1 m/s)."""
@@ -51,6 +64,37 @@ def heat_index_ext_c(t_c, rh):
     temperature and humidity. Used as the cross-check of every verdict."""
     t, rh = np.atleast_1d(np.asarray(t_c, dtype=float)), np.atleast_1d(np.asarray(rh, dtype=float))
     return np.asarray(heat_index_lu(t, np.clip(rh, 0, 100), round_output=False).hi, dtype=float)
+
+
+def first_hour_over(running, limit):
+    """Hours into the week when a running total first passes `limit` (None: never)."""
+    over = np.nonzero(np.asarray(running) > limit)[0]
+    return int(over[0]) + 1 if len(over) else None
+
+
+def heat_dose(hi):
+    """Heat-dose numbers for an hourly felt heat index series (see CAUTION_C):
+    hazard hours above caution, when the Chen et al. limits are passed, and
+    the hours spent in each NWS band (band_<name>_h)."""
+    hi = np.asarray(hi, dtype=float)
+    running = np.cumsum(np.clip(hi - CAUTION_C, 0, None))
+    edges = [lo for _, lo in BANDS] + [np.inf]
+    return {
+        "hazard_hours_ch": round(float(running[-1]), 0),
+        "hours_to_elderly_limit": first_hour_over(running, DOSE_LIMIT_ELDERLY_CH),
+        "hours_to_young_limit": first_hour_over(running, DOSE_LIMIT_YOUNG_CH),
+        "max_hi_over_limit": bool(hi.max() >= HI_MAX_LIMIT_C),
+        **{f"band_{name}_h": int(((hi >= edges[i]) & (hi < edges[i + 1])).sum())
+           for i, (name, _) in enumerate(BANDS)},
+    }
+
+
+def cut_hours_list(start_hour, length_h=1):
+    """Hours of the day with no power: `length_h` hours from `start_hour`
+    (wraps past midnight; 24 = no power all week). None start = no cut."""
+    if start_hour is None:
+        return []
+    return sorted({(int(start_hour) + i) % 24 for i in range(max(1, min(24, int(length_h))))})
 
 
 def column(df, text):
@@ -93,6 +137,7 @@ def safe_hours(csv_path, cut_hours=None):
         "mean_indoor_temp_c": round(float(t.mean()), 1),
         "safe_hours_extended_hi": int((hi_ext < SAFE_LIMIT_C).sum()),
         "max_extended_hi_c": round(float(hi_ext.max()), 1),
+        **heat_dose(hi),
     }
     hourly = pd.DataFrame({"hour": hour, "t_out": t_out, "rh_out": rh_out,
                            "t_in": t, "t_mrt": t_mrt, "rh_in": rh,
@@ -123,8 +168,11 @@ def peaks(hourly):
     c = h[h["cut"]]
     cut = None
     if len(c):
+        hours = set(int(x) for x in c["hour"])
+        # First hour of the cut: the one whose previous hour has power (0 when it never has).
+        start = next((x for x in sorted(hours) if (x - 1) % 24 not in hours), 0)
         cut = {
-            "start_hour": int(c["hour"].min()), "end_hour": int(c["hour"].max()) + 1,
+            "start_hour": start, "end_hour": (start + len(hours)) % 24, "length_h": len(hours),
             "max_indoor_temp_c": round(float(c["t_in"].max()), 1),
             "max_heat_index_c": round(float(c["heat_index"].max()), 1),
             "nights_in_danger": int(c.groupby("day")["danger"].any().sum()),

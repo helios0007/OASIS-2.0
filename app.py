@@ -18,7 +18,8 @@ from oasis.assess import assess
 from oasis.build_idf import MATERIALS, ROOFS, WALLS
 from oasis.from_rhino import read_model
 from oasis.labels import LABELS, name_of
-from oasis.metrics import FAN_CREDIT_C, SAFE_LIMIT_C, peaks
+from oasis.metrics import (CAUTION_C, DOSE_LIMIT_ELDERLY_CH, DOSE_LIMIT_YOUNG_CH, FAN_CREDIT_C,
+                           SAFE_LIMIT_C, cut_hours_list, peaks)
 from oasis.params import BASELINE, SWEEP_LEVELS
 
 SAMPLE = config.ROOT / "data" / "rhino" / "sample_flat.3dm"
@@ -194,8 +195,11 @@ def main():
         st.caption(scenario.WEATHERS[weather]["note"])
         cut_options = [None] + list(range(24))
         cut_start = st.selectbox("Power cut (fans off)", cut_options, index=cut_options.index(config.CUT_START_HOUR),
-                                 format_func=lambda h: "No power cut" if h is None else f"{h:02d}:00–{(h + 1) % 24:02d}:00")
-    cut_hours = () if cut_start is None else (cut_start,)
+                                 format_func=lambda h: "No power cut" if h is None else f"from {h:02d}:00")
+        lengths = {c["hours"]: f"{c['label']} ({c['note']})" for c in scenario.CUT_LENGTHS}
+        cut_length = st.selectbox("Cut length, every day", list(lengths), format_func=lengths.get,
+                                  disabled=cut_start is None)
+    cut_hours = tuple(cut_hours_list(cut_start, cut_length))
     first_day = config.RUN_START[1]
 
     p = dict(BASELINE, **geometry, **choices)
@@ -208,11 +212,18 @@ def main():
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Thermal Autonomy (Safe Hours)", f"{summary['safe_hours']} / {summary['hours_total']} h", f"{pct}% of week safe")
     if cut_hours:
-        k2.metric("Power-Cut Hours in Danger", f"{summary['cut_hours_in_danger']} / 7 cuts", f"{7 - summary['cut_hours_in_danger']}/7 cuts safe")
+        n_cut = 7 * len(cut_hours)
+        k2.metric("Power-Cut Hours in Danger", f"{summary['cut_hours_in_danger']} / {n_cut} h", f"{n_cut - summary['cut_hours_in_danger']}/{n_cut} cut hours safe")
     else:
         k2.metric("Power Cut", "none", "fans run every hour", delta_color="off")
     k3.metric("Peak Felt Heat Index", f"{summary['max_heat_index_c']:.1f} °C", f"Air peak {summary['max_indoor_temp_c']:.1f} °C", delta_color="inverse")
     k4.metric("Overheating Severity", f"{summary['degree_hours_over_limit']:.0f} °C·h", f"Above {SAFE_LIMIT_C:.0f} °C limit", delta_color="inverse")
+    # Heat dose (Chen et al. 2024): felt heat above the caution level, summed over the week
+    after = lambda h: "not reached" if h is None else f"after {h} h"
+    st.caption(f"**Heat dose {summary['hazard_hours_ch']:.0f} °C·h** above {CAUTION_C:.0f} °C felt heat. "
+               f"Illness likely (Chen et al. 2024): elderly {after(summary['hours_to_elderly_limit'])} "
+               f"({DOSE_LIMIT_ELDERLY_CH:.0f} °C·h), young adults {after(summary['hours_to_young_limit'])} "
+               f"({DOSE_LIMIT_YOUNG_CH:.0f} °C·h).")
 
     # Two peaks from the same run: the room's normal daily peak and the peak during the cut
     pk = peaks(hourly)
@@ -254,7 +265,7 @@ def main():
                 <div style="background:#101829;border:1px solid rgba(148,163,184,0.18);border-left:4px solid #10b981;border-radius:8px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
                   <div>
                     <b style="color:#f8fafc">#{rank} {name_of(ch['parameter'], ch['value'])}</b>
-                    <div style="font-size:12px;color:#94a3b8">Reaches <b>{ch['safe_hours']} / 168 h</b> · Peak HI {d_peak:+.1f} °C · Cut danger: {ch['cut_hours_in_danger']}/{7 if cut_hours else 0}</div>
+                    <div style="font-size:12px;color:#94a3b8">Reaches <b>{ch['safe_hours']} / 168 h</b> · Peak HI {d_peak:+.1f} °C · Cut danger: {ch['cut_hours_in_danger']}/{7 * len(cut_hours)} h</div>
                   </div>
                   <span style="font-size:20px;font-weight:700;color:#10b981;font-family:monospace">+{gain}h</span>
                 </div>
@@ -328,7 +339,7 @@ def main():
             "Change": name_of(ch["parameter"], ch["value"]),
             "Safe Hours": ch["safe_hours"],
             "Net Gain (h)": ch["safe_hours_gained"],
-            "Cut Danger (/7)": ch["cut_hours_in_danger"],
+            "Cut hours in danger": ch["cut_hours_in_danger"],
             "Peak HI (°C)": ch["max_heat_index_c"],
             "Over Limit (°C·h)": ch["degree_hours_over_limit"],
         } for ch in changes])

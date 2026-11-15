@@ -331,6 +331,24 @@ function bestCombo(s) {
   return best;
 }
 
+// Best package of exactly n changes (every combination is in the sweep): {s, r, parts}
+function bestPackage(s, n) {
+  const ks = designKeys(s), cur = run(s); let best = null;
+  (function pick(start, cand, parts) {
+    if (parts.length === n) {
+      const r = run(cand);
+      if (!best || r.safe > best.r.safe || (r.safe === best.r.safe && r.deg < best.r.deg)) best = { s: { ...cand }, r, parts: [...parts] };
+      return;
+    }
+    for (let a = start; a < ks.length; a++) D.levels[ks[a]].forEach((_, i) => {
+      if (i !== s[ks[a]]) pick(a + 1, { ...cand, [ks[a]]: i }, [...parts, [ks[a], i]]);
+    });
+  })(0, { ...s }, []);
+  return best && best.r.safe > cur.safe ? { ...best, gain: best.r.safe - cur.safe } : null;
+}
+// Heat dose (Chen et al. 2024): felt heat above 27 C, summed over the week
+const doseOf = arr => Math.round(arr.reduce((t, v) => t + Math.max(0, v - 27), 0));
+
 function buildInputs() {
   $("inputs").innerHTML = ORDER.map(k => {
     const cols = D.levels[k].length === 3 ? "three-col" : "two-col";
@@ -356,7 +374,7 @@ function syncInputs() {
   ROOF_ONLY.forEach(k => { $(`fs-${k}`).disabled = isMiddle(state); $(`hint-${k}`).hidden = !isMiddle(state); });
 }
 
-let shown = [];
+let shown = [], packs = [];
 function update() {
   syncInputs();
   const r = run(state), changes = singleChanges(state), hiArr = hiOf(state);
@@ -389,7 +407,7 @@ function update() {
     <div class="kpi-card" style="--kpi-color:var(--extreme)">
       <div class="kpi-top"><span class="kpi-label">Overheating</span><span class="kpi-badge warn">Severity</span></div>
       <div class="kpi-main"><span class="kpi-val">${r.deg.toFixed(0)}</span><span class="kpi-unit">°C·h</span></div>
-      <div class="kpi-sub"><span>Above 41 °C</span></div>
+      <div class="kpi-sub"><span>Above 41 °C · dose ${doseOf(hiArr).toLocaleString("en-GB")} °C·h above 27 °C</span></div>
     </div>`;
 
   $("tm-barcode").innerHTML = hiArr.map(v => `<span style="background:${hiColor(v)}"></span>`).join("");
@@ -406,6 +424,17 @@ function update() {
       <div class="interv-bar-track"><div class="interv-bar-fill" style="width:${Math.min(100, c.gain * 1.5)}%"></div></div>
       <button type="button" class="btn-apply" data-k="${c.k}" data-i="${c.i}">Apply Change</button>
     </div>`).join("") : `<div class="interv-card"><b style="color:var(--safe)">✨ Optimal Combination Active (${r.safe}h)</b></div>`;
+
+  // Packages: the best two and the best three changes together (looked up, not added up)
+  const single = top.length ? top[0].gain : 0;
+  packs = [2, 3].map(n => bestPackage(state, n)).filter(p => p && p.gain > single);
+  $("changes").insertAdjacentHTML("beforeend", packs.map((p, n) => `
+    <div class="interv-card">
+      <div class="interv-row-1"><b>Package of ${p.parts.length}: ${p.parts.map(([k, i]) => esc(optLabel(k, i))).join(" + ")}</b><span class="interv-gain">+${p.gain}h</span></div>
+      <div style="font-size:11px;color:var(--muted)">Reaches ${p.r.safe}/168h · simulated together · dose ${doseOf(hiOf(p.s)).toLocaleString("en-GB")} °C·h</div>
+      <div class="interv-bar-track"><div class="interv-bar-fill" style="width:${Math.min(100, p.gain * 1.5)}%"></div></div>
+      <button type="button" class="btn-apply" data-pack="${n}">Apply Package</button>
+    </div>`).join(""));
 
   shown = [];
   if (top.length) shown.push({ id: "alt", arr: hiOf({ ...state, [top[0].k]: top[0].i }), color: "--alt", name: `+ ${optLabel(top[0].k, top[0].i)}`, short: "Top change" });
@@ -508,7 +537,11 @@ document.querySelectorAll("[data-cam]").forEach(btn => {
   });
 });
 
-$("changes").addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (b) { state[b.dataset.k] = +b.dataset.i; update(); } });
+$("changes").addEventListener("click", e => {
+  const p = e.target.closest("[data-pack]"), b = e.target.closest("[data-k]");
+  if (p) { state = { ...packs[+p.dataset.pack].s }; update(); }
+  else if (b) { state[b.dataset.k] = +b.dataset.i; update(); }
+});
 $("reset").addEventListener("click", () => { state = { ...DEFAULT }; update(); });
 $("preset-base").addEventListener("click", () => { state = { ...DEFAULT }; update(); });
 $("preset-cool").addEventListener("click", () => { state = { ...DEFAULT, roof_solar_absorptance: 2 }; update(); });
@@ -542,7 +575,7 @@ document.querySelectorAll("[data-view]").forEach(btn => {
 
 $("nruns").textContent = D.n.toLocaleString("en-GB");
 $("sweeptxt").textContent = `${D.n.toLocaleString("en-GB")} EnergyPlus 26.2 runs embedded for each of ${D.weathers.length} outdoor-air cases.`;
-$("surtxt").textContent = `XGBoost R² = ${D.surrogate.r2} (MAE ${D.surrogate.mae_hours.toFixed(1)}h), airport air.`;
+$("surtxt").textContent = `XGBoost R² = ${D.surrogate.r2} (MAE ${D.surrogate.mae_hours.toFixed(1)}h)${D.surrogate.by_source ? `, ${D.surrogate.weathers.length} air cases, random rooms ±${D.surrogate.by_source["random rooms"]?.mae_hours ?? "–"}h` : ", airport air"}.`;
 buildWeather();
 buildInputs();
 update();

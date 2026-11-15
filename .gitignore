@@ -35,3 +35,6 @@ outputs/unit_cache/
 outputs/plans/
 outputs/fan_test/
 outputs/roof_test/
+
+# Review deck: figures cropped from published papers (not ours to publish)
+docs/deck/review3_figs/*_fig*.png

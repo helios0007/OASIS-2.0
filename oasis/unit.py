@@ -21,7 +21,8 @@ from oasis.agents import (CORE_CAUTION_C, CORE_CRITICAL_C, CORE_LIMIT_C, DEFAULT
                           STEP_S, V_OUTDOORS, V_STILL, ZONES, feedback, routine, status_of)
 from oasis.build_layout import (DOOR_HEIGHT_M, OPENING_KINDS, OPPOSITE, build_layout_idf, load_layout,
                                 split_party, wall_segments, windowless_party, zone_id)
-from oasis.metrics import SAFE_LIMIT_C, fan_credit_c, heat_index_c, heat_index_ext_c
+from oasis.assess import greedy_packages, result_row
+from oasis.metrics import SAFE_LIMIT_C, fan_credit_c, heat_dose, heat_index_c, heat_index_ext_c
 from oasis.params import BASELINE
 from oasis.simulate import run
 
@@ -216,7 +217,8 @@ def summary_of(h):
             "max_heat_index_c": round(float(hi.max()), 1), "max_indoor_temp_c": round(float(t.max()), 1),
             "mean_indoor_temp_c": round(float(t.mean()), 1),
             "safe_hours_extended_hi": int((h["heat_index_ext"] < SAFE_LIMIT_C).sum()),
-            "max_extended_hi_c": round(float(h["heat_index_ext"].max()), 1)}
+            "max_extended_hi_c": round(float(h["heat_index_ext"].max()), 1),
+            **heat_dose(hi)}
 
 
 def body_check(people, h):
@@ -248,8 +250,8 @@ def assess_plan(p, path, agents=None, party=None, lock=None, options=(), epw=Non
     """The main tool's assessment for a room-by-room plan: the design p (the
     tool's settings) and each single change in `options` [(key, value)], all on
     the multi-room AirflowNetwork model. Returns the same parts as
-    oasis.assess for a single room, plus the people, the body check and the
-    data for the 3D view."""
+    oasis.assess for a single room, plus the people, the body check, the
+    data for the 3D view and the packages (the best changes together)."""
     lay, segs = plan_geometry(path, party)
     base = dict(BASELINE, **p, airflow_model="afn")
     if party:
@@ -257,31 +259,41 @@ def assess_plan(p, path, agents=None, party=None, lock=None, options=(), epw=Non
     designs = [base] + [dict(base, **{k: v}) for k, v in options]
     tag = json.dumps([str(path), p, party, list(options), str(epw), cut_hours], sort_keys=True, default=str)
     work = config.OUT / "unit_runs" / hashlib.sha1(tag.encode()).hexdigest()[:12]
-    if lock:
-        lock.acquire()
-    try:     # eppy is not thread-safe: write the models one by one
-        jobs = [(build_layout_idf(lay, d, work / f"{i}.idf"), work / str(i)) for i, d in enumerate(designs)]
-    finally:
-        if lock:
-            lock.release()
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        csvs = list(pool.map(lambda j: run(j[0], j[1], epw or config.EPW), jobs))
-    runs = [room_hourly(c, lay, cut_hours) for c in csvs]
-    shutil.rmtree(work, ignore_errors=True)
+    done = []        # one entry per model written, so every run gets its own folder
 
+    def simulate(designs):
+        """Write the models one by one (eppy is not thread-safe), run them side by side."""
+        if lock:
+            lock.acquire()
+        try:
+            jobs = []
+            for d in designs:
+                n = len(done)
+                done.append(n)
+                jobs.append((build_layout_idf(lay, d, work / f"{n}.idf"), work / str(n)))
+        finally:
+            if lock:
+                lock.release()
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            csvs = list(pool.map(lambda j: run(j[0], j[1], epw or config.EPW), jobs))
+        return [room_hourly(c, lay, cut_hours) for c in csvs]
+
+    def scored(run_out):
+        h = occupied_hourly(run_out[0], lay, run_out[1])
+        return summary_of(h), h
+
+    runs = simulate(designs)
     rooms_h, cut = runs[0]
     hourly = occupied_hourly(rooms_h, lay, cut)
     summary = summary_of(hourly)
     people = run_people(agents or DEFAULT_AGENTS, lay["rooms"], rooms_h, cut)
-    changes = []
-    for (key, value), (rh, c) in zip(options, runs[1:]):
-        h = occupied_hourly(rh, lay, c)
-        s = summary_of(h)
-        changes.append({"parameter": key, "value": value, "safe_hours": s["safe_hours"],
-                        "safe_hours_gained": s["safe_hours"] - summary["safe_hours"],
-                        "cut_hours_in_danger": s["cut_hours_in_danger"], "max_heat_index_c": s["max_heat_index_c"],
-                        "degree_hours_over_limit": s["degree_hours_over_limit"], "hourly": h})
+    changes = [{"parameter": key, "value": value, **result_row(*scored(r), summary)}
+               for (key, value), r in zip(options, runs[1:])]
     changes.sort(key=lambda c: (-c["safe_hours_gained"], c["degree_hours_over_limit"]))
+    # The best changes together, built step by step (oasis.assess.greedy_packages)
+    packages = greedy_packages(base, summary, changes, lambda ds: [scored(r) for r in simulate(ds)])
+    shutil.rmtree(work, ignore_errors=True)
+
     unit = {
         "geometry": geometry(lay, segs),
         "rooms": {n: {k: np.round(v, 1).tolist() for k, v in r.items() if k != "hi_ext"}
@@ -293,4 +305,4 @@ def assess_plan(p, path, agents=None, party=None, lock=None, options=(), epw=Non
                      "core_critical_c": CORE_CRITICAL_C,
                      "party_walls": party or ("drawn" if lay.get("party_walls") else "none")},
     }
-    return summary, hourly, changes, people, body_check(people, hourly), unit
+    return summary, hourly, changes, people, body_check(people, hourly), unit, packages

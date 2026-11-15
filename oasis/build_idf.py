@@ -15,8 +15,16 @@ IDF.setiddname(str(Path(config.ENERGYPLUS).parent / "Energy+.idd"))
 
 ZONE = "ZONE ONE"
 
-# Starting values; check against ENS 2024 or the ISHRAE handbook later.
 # name: (thickness m, conductivity W/m.K, density kg/m3, specific heat J/kg.K)
+# Checked 2026-11-13 against SP 41 (S&T) 1987, Part 2, Table 2 (BIS, properties at 50 C):
+#   burnt brick 1820 / 0.811 / 0.88, cement plaster 1762 / 0.721 / 0.84, RCC 2288 / 1.58 / 0.88,
+#   EPS 24 kg/m3 0.035 / 1.34, lime concrete 1646 / 0.730 / 0.88 (used for coba),
+#   cement mortar 1648 / 0.719 / 0.92, brick tile 1892 / 0.798 / 0.88.
+# The values below are those, rounded; mortar/screed use plaster's specific heat (840, table 920) and
+# the tile uses burnt brick. Kept as they are so the calibration and sweeps stay consistent:
+# exact table values change safe hours by 0-1 h (baseline 59 -> 58, screed and coba roofs unchanged).
+# AAC is NOT in SP 41 and its source is not confirmed (SP 41 has cellular concrete 704 / 0.188 / 1.05).
+# Tested 0.149-0.24 W/m.K, 642-750 kg/m3: the AAC wall stays at 64 safe hours, so it does not matter here.
 MATERIALS = {
     "plaster": (0.015, 0.72, 1760, 840),    # cement plaster
     "brick":   (0.230, 0.81, 1820, 880),    # burnt clay brick
@@ -24,7 +32,7 @@ MATERIALS = {
     "aac":     (0.200, 0.184, 642, 794),    # autoclaved aerated concrete block
     "rcc":     (0.150, 1.58, 2288, 880),    # RCC slab
     "eps":     (0.050, 0.035, 24, 1340),    # EPS insulation
-    # Roof finishes, values from SP 41 (BIS Handbook on functional requirements of buildings)
+    # Roof finishes (SP 41, see the note above)
     "screed":  (0.040, 0.72, 1648, 840),    # cement mortar screed on the slab ("concrete + cement")
     "mortar":  (0.012, 0.72, 1648, 840),    # mortar bed under the tiles
     "coba":    (0.085, 0.73, 1646, 880),    # brick-bat coba (lime concrete with brick bats)

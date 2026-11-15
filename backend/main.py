@@ -8,7 +8,8 @@ Routes
     GET  /api/health    is the server up?
     GET  /api/options   the choices the front end offers, and the scenario
     POST /api/rhino     upload a .3dm file -> room size and windows
-    POST /api/assess    building parameters -> safe hours + ranked changes
+    POST /api/assess    building parameters -> safe hours + ranked changes + packages
+    POST /api/predict   building parameters -> instant surrogate estimate (single room only)
     A room-by-room plan (.3dm on the OASIS:: layers) imported through /api/rhino is
     kept on the server (outputs/plans/); /api/assess with its plan_id then runs the
     multi-room model and also returns 'unit' for the 3D tab.
@@ -32,7 +33,7 @@ from oasis.agents import (
     V_IN_ROOM, V_STILL, V_UNDER_FAN, compare_with_heat_index, simulate_household,
 )
 from oasis import scenario
-from oasis.assess import assess, single_changes
+from oasis.assess import assess, assess_packages, single_changes
 from oasis.box_view import box_unit
 from oasis.build_idf import (
     ACTIVITY_W, APPLIANCES_PEAK_W, GLASS_SHGC, GLASS_U,
@@ -40,8 +41,10 @@ from oasis.build_idf import (
 )
 from oasis.from_rhino import read_model
 from oasis.labels import LABELS
-from oasis.metrics import FAN_AIR_SPEED_MS, FAN_CREDIT_C, SAFE_LIMIT_C, peaks
+from oasis.metrics import (BANDS, CAUTION_C, DOSE_LIMIT_ELDERLY_CH, DOSE_LIMIT_YOUNG_CH, FAN_AIR_SPEED_MS,
+                           FAN_CREDIT_C, HI_MAX_LIMIT_C, SAFE_LIMIT_C, cut_hours_list, peaks)
 from oasis.params import BASELINE, SWEEP_LEVELS
+from oasis import surrogate
 from oasis.unit import assess_plan
 
 app = FastAPI(title="OASIS 2.0 Workbench")
@@ -108,9 +111,11 @@ class Building(BaseModel):
     # A room-by-room plan imported through /api/rhino (then geometry comes from the plan)
     plan_id: Optional[str] = Field(None, pattern=r"^[0-9a-f]{16}$")
     party_walls: Optional[str] = None      # None: as drawn; "windowless": every windowless wall shared
-    # Scenario (oasis/scenario.py): outdoor air, and the hour the one-hour power cut starts (None: no cut)
+    # Scenario (oasis/scenario.py): outdoor air, the hour the daily power cut starts
+    # (None: no cut) and how many hours it lasts (24: no power all week)
     weather: str = scenario.DEFAULT_WEATHER
     cut_start_hour: Optional[int] = Field(config.CUT_START_HOUR, ge=0, le=23)
+    cut_length_h: int = Field(1, ge=1, le=24)
 
 
 def check_choices(b: Building):
@@ -143,7 +148,8 @@ def options():
     """Everything the front end needs to draw its form."""
     return {
         "baseline": {**{k: BASELINE[k] for k in Building.model_fields if k in BASELINE},
-                     "weather": scenario.DEFAULT_WEATHER, "cut_start_hour": config.CUT_START_HOUR},
+                     "weather": scenario.DEFAULT_WEATHER, "cut_start_hour": config.CUT_START_HOUR,
+                     "cut_length_h": 1},
         "choices": [
             {"key": key, "title": title,
              "options": [{"value": value, "label": labels[value]}
@@ -157,6 +163,10 @@ def options():
             "cut_start_hour": config.CUT_START_HOUR,
             "cut_end_hour": config.CUT_END_HOUR,
             "safe_limit_c": SAFE_LIMIT_C,
+            "cut_lengths": scenario.CUT_LENGTHS,
+            "dose": {"caution_c": CAUTION_C, "elderly_ch": DOSE_LIMIT_ELDERLY_CH,
+                     "young_ch": DOSE_LIMIT_YOUNG_CH, "hi_max_c": HI_MAX_LIMIT_C,
+                     "bands": [{"key": k, "from_c": None if lo == float("-inf") else lo} for k, lo in BANDS]},
             "fan_credit_c": FAN_CREDIT_C,
             "fan_air_speed_ms": FAN_AIR_SPEED_MS,
             "spinup_days": config.SPINUP_DAYS,
@@ -253,6 +263,18 @@ async def rhino(file: UploadFile = File(...)):
             raise HTTPException(400, "This file could not be read as a Rhino model.")
 
 
+@app.post("/api/predict")
+def predict_building(b: Building):
+    """Instant estimate from the surrogate (oasis/surrogate.py), before the simulation
+    is run. The standard evening cut only; None for a room-by-room plan or without
+    trained models."""
+    check_choices(b)
+    if b.plan_id or cut_hours_list(b.cut_start_hour, b.cut_length_h) != scenario.DEFAULT_CUT_HOURS:
+        return {"estimate": None}
+    p = dict(BASELINE, **b.model_dump(exclude_none=True))
+    return {"estimate": surrogate.predict(p, b.weather)}
+
+
 @app.post("/api/assess")
 def assess_building(b: Building):
     """Simulate the building and each single design change (main measure: heat index
@@ -262,28 +284,29 @@ def assess_building(b: Building):
     custom_agents = dumped.pop("agents", None)
     plan_id, party = dumped.pop("plan_id", None), dumped.pop("party_walls", None)
     weather, cut_start = dumped.pop("weather"), dumped.pop("cut_start_hour", None)
-    cut_hours = [] if cut_start is None else [cut_start]
+    cut_hours = cut_hours_list(cut_start, dumped.pop("cut_length_h", 1))
     try:
         epw = scenario.weather_file(weather)
     except ValueError as error:
         raise HTTPException(422, str(error))
-    scen = {"weather": weather, "cut_hours": cut_hours}
+    scen = {"weather": weather, "cut_hours": cut_hours}   # cut_hours already holds start and length
     p = dict(BASELINE, **dumped)
     if plan_id:
         return assess_plan_building(p, plan_id, party, custom_agents or DEFAULT_AGENTS, epw, scen)
     key = json.dumps([p, scen], sort_keys=True)
 
     if key in CACHE:
-        summary, hourly, changes = CACHE[key]
+        summary, hourly, changes, packages = CACHE[key]
     else:
         with SIMULATION_LOCK:
             try:
                 summary, hourly, changes = assess(p, epw, cut_hours)
+                packages = assess_packages(p, summary, changes, epw, cut_hours)
             except Exception as error:
                 raise HTTPException(500, f"The simulation failed: {error}")
         if len(CACHE) >= CACHE_LIMIT:
             CACHE.pop(next(iter(CACHE)))
-        CACHE[key] = (summary, hourly, changes)
+        CACHE[key] = (summary, hourly, changes, packages)
 
     roster = custom_agents or DEFAULT_AGENTS
     body_key = key + json.dumps(roster, sort_keys=True)
@@ -297,10 +320,17 @@ def assess_building(b: Building):
         BODY_CACHE[body_key] = (people, compare_with_heat_index(people, hourly))
     agents_out, check = BODY_CACHE[body_key]
 
-    return response(summary, hourly, changes, agents_out, check, box_unit(p, hourly, agents_out), p, scen)
+    return response(summary, hourly, changes, agents_out, check, box_unit(p, hourly, agents_out), packages, p, scen)
 
 
-def response(summary, hourly, changes, agents_out, check, unit, p, scen):
+def series(hourly):
+    """The hourly lines the front end draws for a changed design."""
+    return {"heat_index": hourly["heat_index"].round(1).tolist(),
+            "indoor_temp": hourly["t_in"].round(1).tolist(),
+            "humidity": hourly["rh_in"].round(0).tolist()}
+
+
+def response(summary, hourly, changes, agents_out, check, unit, packages, p, scen):
     """What the front end gets back from /api/assess."""
     unit["design"] = {k: p[k] for k in ("floor", "roof", "roof_solar_absorptance", "wall", "shading_depth_m")}
     return {
@@ -318,10 +348,18 @@ def response(summary, hourly, changes, agents_out, check, unit, p, scen):
             {**{k: v for k, v in change.items() if k != "hourly"},
              "title": LABELS[change["parameter"]][0],
              "label": LABELS[change["parameter"]][1][change["value"]],
-             "heat_index": change["hourly"]["heat_index"].round(1).tolist(),
-             "indoor_temp": change["hourly"]["t_in"].round(1).tolist(),
-             "humidity": change["hourly"]["rh_in"].round(0).tolist()}
+             **series(change["hourly"])}
             for change in changes
+        ],
+        # The best single changes applied together (oasis.assess.assess_packages)
+        "packages": [
+            {**{k: v for k, v in pack.items() if k not in ("hourly", "changes")},
+             "title": f"Package of {len(pack['changes'])}",
+             "label": " + ".join(LABELS[c["parameter"]][1][c["value"]] for c in pack["changes"]),
+             "changes": [{**c, "title": LABELS[c["parameter"]][0],
+                          "label": LABELS[c["parameter"]][1][c["value"]]} for c in pack["changes"]],
+             **series(pack["hourly"])}
+            for pack in packages
         ],
         "unit": unit,
     }

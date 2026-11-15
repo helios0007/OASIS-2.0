@@ -1,8 +1,87 @@
 {
-  "designs_total": 1512,
-  "designs_train": 1209,
-  "designs_test": 303,
-  "r2": 0.996,
-  "mae_hours": 1.5,
-  "max_error_hours": 10.3
+  "designs_total": 6036,
+  "designs_train": 4828,
+  "designs_test": 1208,
+  "r2": 0.987,
+  "mae_hours": 2.39,
+  "max_error_hours": 29.0,
+  "by_source": {
+    "random rooms": {
+      "designs": 300,
+      "r2": 0.962,
+      "mae_hours": 5.2,
+      "max_error_hours": 29.0
+    },
+    "grid": {
+      "designs": 908,
+      "r2": 0.996,
+      "mae_hours": 1.46,
+      "max_error_hours": 8.1
+    }
+  },
+  "hazard": {
+    "designs": 1208,
+    "r2": 0.992,
+    "mae_ch": 27.49,
+    "max_error_ch": 682.5
+  },
+  "weathers": [
+    "airport",
+    "city",
+    "street_ac"
+  ],
+  "ranges": {
+    "length_m": [
+      3.0,
+      8.99
+    ],
+    "width_m": [
+      2.5,
+      7.0
+    ],
+    "height_m": [
+      2.6,
+      3.6
+    ],
+    "orientation_deg": [
+      0.0,
+      345.0
+    ],
+    "roof_solar_absorptance": [
+      0.2,
+      0.8
+    ],
+    "wwr": [
+      0.05,
+      0.4
+    ],
+    "shading_depth_m": [
+      0.0,
+      1.0
+    ],
+    "occupants": [
+      1.0,
+      8.0
+    ]
+  },
+  "importance_mae_rise_h": {
+    "night_vent": 22.7,
+    "weather": 11.77,
+    "wwr": 11.3,
+    "orientation_deg": 9.42,
+    "roof_solar_absorptance": 3.97,
+    "floor": 2.88,
+    "roof": 2.56,
+    "wall": 2.55,
+    "occupants": 1.8,
+    "shading_depth_m": 1.2,
+    "length_m": 0.7,
+    "height_m": 0.21,
+    "width_m": 0.16
+  },
+  "envelope_share_pct": {
+    "Roof": 30.3,
+    "Windows": 57.9,
+    "Walls": 11.8
+  }
 }

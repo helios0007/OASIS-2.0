@@ -1,5 +1,6 @@
 """Assess one building live: simulate it, then re-simulate it with each
-single design change and rank the changes by safe hours gained.
+single design change and rank the changes by safe hours gained. The best
+changes are then simulated together as packages (assess_packages).
 
 Used for buildings that are not in the stored sweep, e.g. a Rhino model.
 """
@@ -17,6 +18,9 @@ WORK = config.OUT / "live_runs"   # temporary run folders, removed after use
 
 # Design choices that can be tested on any geometry
 CHOICES = ("wall", "roof", "roof_solar_absorptance", "shading_depth_m", "night_vent")
+# Packages: changes applied together, up to this many
+# (Wu et al. 2025: single measures gain little, packages remove the danger hours).
+PACKAGE_MAX = 3
 
 
 def simulate_many(designs, epw=None, cut_hours=None):
@@ -46,6 +50,19 @@ def single_changes(p):
     return options
 
 
+def result_row(s, h, summary):
+    """The numbers kept for a changed design, against the design as drawn."""
+    return {
+        "safe_hours": s["safe_hours"],
+        "safe_hours_gained": s["safe_hours"] - summary["safe_hours"],
+        "cut_hours_in_danger": s["cut_hours_in_danger"],
+        "max_heat_index_c": s["max_heat_index_c"],
+        "degree_hours_over_limit": s["degree_hours_over_limit"],
+        "hazard_hours_ch": s["hazard_hours_ch"],
+        "hourly": h,
+    }
+
+
 def assess(p, epw=None, cut_hours=None):
     """Returns (summary, hourly, changes) for one building.
     changes: one row per single design change, best first."""
@@ -56,16 +73,47 @@ def assess(p, epw=None, cut_hours=None):
     results = simulate_many(designs, epw, cut_hours)
     summary, hourly = results[0]
 
-    changes = []
-    for (key, level), (s, h) in zip(options, results[1:]):
-        changes.append({
-            "parameter": key, "value": level,
-            "safe_hours": s["safe_hours"],
-            "safe_hours_gained": s["safe_hours"] - summary["safe_hours"],
-            "cut_hours_in_danger": s["cut_hours_in_danger"],
-            "max_heat_index_c": s["max_heat_index_c"],
-            "degree_hours_over_limit": s["degree_hours_over_limit"],
-            "hourly": h,
-        })
+    changes = [{"parameter": key, "value": level, **result_row(s, h, summary)}
+               for (key, level), (s, h) in zip(options, results[1:])]
     changes.sort(key=lambda c: (-c["safe_hours_gained"], c["degree_hours_over_limit"]))
     return summary, hourly, changes
+
+
+def package_row(parts, s, h, summary):
+    """One package: its changes, its result, and the sum of its single gains
+    (a package usually gains less than that sum: the changes overlap)."""
+    return {"changes": [{"parameter": c["parameter"], "value": c["value"],
+                         "safe_hours_gained": c["safe_hours_gained"]} for c in parts],
+            "sum_of_single_gains": sum(c["safe_hours_gained"] for c in parts),
+            **result_row(s, h, summary)}
+
+
+def greedy_packages(p, summary, changes, simulate):
+    """Build packages step by step. Start from the best single change; at each
+    step simulate it with every remaining single change added and keep the one
+    that reaches the most safe hours. Stops at PACKAGE_MAX changes, or when
+    nothing adds safe hours (changes can cancel: insulation under a white roof
+    holds the night heat in).
+    simulate(designs) -> [(summary, hourly), ...]. Returns one row per step."""
+    if not changes or changes[0]["safe_hours_gained"] <= 0:
+        return []
+    parts, best_safe, packages = [changes[0]], changes[0]["safe_hours"], []
+    while len(parts) < PACKAGE_MAX:
+        used = {c["parameter"] for c in parts}
+        candidates = [c for c in changes if c["parameter"] not in used]
+        if not candidates:
+            break
+        fixed = {c["parameter"]: c["value"] for c in parts}
+        results = simulate([dict(p, **fixed, **{c["parameter"]: c["value"]}) for c in candidates])
+        i = max(range(len(candidates)),
+                key=lambda i: (results[i][0]["safe_hours"], -results[i][0]["degree_hours_over_limit"]))
+        if results[i][0]["safe_hours"] <= best_safe:
+            break
+        parts, best_safe = parts + [candidates[i]], results[i][0]["safe_hours"]
+        packages.append(package_row(parts, *results[i], summary))
+    return packages
+
+
+def assess_packages(p, summary, changes, epw=None, cut_hours=None):
+    """The packages of greedy_packages for a single-room building p."""
+    return greedy_packages(p, summary, changes, lambda designs: simulate_many(designs, epw, cut_hours))

@@ -7,7 +7,8 @@ Weather cases (all on the recorded heatwave, 1-7 May 2024):
     street_ac + 1 C at night beside AC outdoor units: literature upper case,
               not measured in Chennai (oasis/ac_heat.py)
 
-Power cut: a list of hours of the day with no fan ([] = no cut).
+Power cut: a list of hours of the day with no fan ([] = no cut), made by
+metrics.cut_hours_list from a start hour and a length (CUT_LENGTHS).
 """
 import json
 
@@ -29,6 +30,15 @@ WEATHERS = {
                           "An upper case from Paris and Phoenix studies, not measured in Chennai."},
 }
 DEFAULT_WEATHER = "airport"
+# How long the daily cut lasts. One hour is Chennai's evening load shedding; the
+# long cases follow the outage studies (Chen 2024: days; Mehraban 2025: 72 h;
+# Shi 2025: 7 days). The cut only removes the fan, so one simulation serves all.
+CUT_LENGTHS = [
+    {"hours": 1, "label": "1 hour", "note": "load shedding"},
+    {"hours": 4, "label": "4 hours", "note": "evening outage"},
+    {"hours": 10, "label": "10 hours", "note": "through the night"},
+    {"hours": 24, "label": "All day", "note": "no power all week"},
+]
 DEFAULT_CUT_HOURS = list(range(config.CUT_START_HOUR, config.CUT_END_HOUR))
 
 

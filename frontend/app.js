@@ -73,7 +73,11 @@ const isCut = h => !!result?.cut?.[h];
 const dayName = d => `${OPT.scenario.first_day + d} ${OPT.scenario.month}`;
 const hourName = h => `${dayName(Math.floor(h / 24))} · ${pad(h % 24)}:00`;
 const signed = n => (n > 0 ? "+" : "") + n;
-const cutLabel = start => start === null || start === undefined ? "no power cut" : `power cut ${pad(start)}:00–${pad((start + 1) % 24)}:00`;
+const cutLabel = (start, len = 1) => start === null || start === undefined ? "no power cut"
+  : len >= 24 ? "no power all week" : `power cut ${pad(start)}:00–${pad((start + len) % 24)}:00`;
+// The change or package compared in the timeline, as a <select> value and back
+const previewKey = c => !c ? "" : result.changes.includes(c) ? `c${result.changes.indexOf(c)}` : `p${(result.packages || []).indexOf(c)}`;
+const previewFrom = v => v === "" ? null : v[0] === "c" ? result.changes[+v.slice(1)] : result.packages[+v.slice(1)];
 const weatherOf = key => OPT.scenario.weathers.find(w => w.key === key) || OPT.scenario.weathers[0];
 
 // Small technical note under an option (from the physics the server reports)
@@ -190,7 +194,7 @@ function cutOptionsHtml() {
   let html = `<option value="">No power cut</option>`;
   for (let h = 0; h < 24; h++) {
     const note = h === OPT.baseline.cut_start_hour ? " · evening load shedding" : h === hottest ? " · room's hottest hour" : "";
-    html += `<option value="${h}">${pad(h)}:00–${pad((h + 1) % 24)}:00${note}</option>`;
+    html += `<option value="${h}">from ${pad(h)}:00${note}</option>`;
   }
   return html;
 }
@@ -202,11 +206,15 @@ function buildForm() {
     <p class="hint sm muted" id="weather-hint" style="margin:-4px 0 12px;line-height:1.45"></p>
     <label class="control"><span class="control-label">Power cut (fans off)</span>
       <select class="select" id="cut_start_hour">${cutOptionsHtml()}</select></label>
+    <label class="control"><span class="control-label">Cut length, every day</span>
+      <select class="select" id="cut_length_h">${OPT.scenario.cut_lengths.map(c =>
+        `<option value="${c.hours}">${esc(c.label)} · ${esc(c.note)}</option>`).join("")}</select></label>
     <p class="hint sm muted" style="margin-top:6px;line-height:1.45">Recorded heatwave, ${OPT.scenario.first_day}–${OPT.scenario.last_day} ${OPT.scenario.month} 2024, after ${OPT.scenario.spinup_days} warm-up days.</p>`;
 
   $("form").addEventListener("change", e => {
     const t = e.target, key = t.name;
     if (t.id === "cut_start_hour") state.cut_start_hour = t.value === "" ? null : +t.value;
+    else if (t.id === "cut_length_h") state.cut_length_h = +t.value;
     else if (t.id === "party") return;
     else if (key && t.type === "radio") state[key] = choice(key).options[+t.value].value;
     else if (key && t.type === "checkbox") state[key] = t.checked;
@@ -242,6 +250,8 @@ function syncForm() {
     if (box) box.checked = !!state[key];
   }
   $("cut_start_hour").value = state.cut_start_hour === null ? "" : String(state.cut_start_hour);
+  $("cut_length_h").value = String(state.cut_length_h);
+  $("cut_length_h").disabled = state.cut_start_hour === null;
   const w = weatherOf(state.weather);
   $("weather-hint").innerHTML = `<span class="tagline ${w.source.toLowerCase()}">${esc(w.source)}</span>${esc(w.note)}`;
 
@@ -268,17 +278,38 @@ function syncForm() {
   $("doc-name").textContent = model
     ? `${model.report.file}${model.plan_id ? ` · ${model.report.rooms} rooms` : " · single room"}`
     : `Single room · ${state.length_m.toFixed(1)} × ${state.width_m.toFixed(1)} × ${state.height_m.toFixed(1)} m`;
-  $("scenario").textContent = `${OPT.scenario.city} · ${OPT.scenario.first_day}–${OPT.scenario.last_day} ${OPT.scenario.month} 2024 · ${w.label.toLowerCase()} air · ${cutLabel(state.cut_start_hour)}`;
+  $("scenario").textContent = `${OPT.scenario.city} · ${OPT.scenario.first_day}–${OPT.scenario.last_day} ${OPT.scenario.month} 2024 · ${w.label.toLowerCase()} air · ${cutLabel(state.cut_start_hour, state.cut_length_h)}`;
 
   const stale = result && JSON.stringify(payload()) !== ranFor;
   $("run").classList.toggle("stale", !!stale);
+  refreshEstimate(!!stale);
   if (!$("run").disabled) $("run-text").textContent = stale ? "Update results" : "Run simulation";
   $("undo").disabled = trail.length < 2 || $("run").disabled;
 }
 
+// Instant surrogate estimate for a design that has not been simulated yet
+let estimateTimer = null, estimateNo = 0;
+function refreshEstimate(stale) {
+  const el = $("estimate");
+  clearTimeout(estimateTimer);
+  const no = ++estimateNo;
+  if (!stale || model?.plan_id) { el.hidden = true; return; }
+  estimateTimer = setTimeout(async () => {
+    try {
+      const e = (await api("/api/predict", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload()) })).estimate;
+      if (no !== estimateNo) return;
+      el.hidden = !e;
+      if (!e) return;
+      el.textContent = `AI estimate ≈ ${e.safe_hours} safe h${e.outside.length ? " · outside trained range" : ""}`;
+      el.title = `XGBoost surrogate, before the simulation: about ${e.safe_hours} safe hours (typical error ${e.mae_hours} h on rooms it has not seen), heat dose about ${e.hazard_hours_ch.toLocaleString()} °C·h.`
+        + (e.outside.length ? ` Outside the trained range: ${e.outside.join(", ")}.` : "") + " Run the simulation for the result.";
+    } catch (_) { el.hidden = true; }
+  }, 250);
+}
+
 function payload() {
   const keys = ["length_m", "width_m", "height_m", "orientation_deg", "floor", "wall", "roof",
-    "roof_solar_absorptance", "wwr", "shading_depth_m", "night_vent", "occupants", "weather", "cut_start_hour"];
+    "roof_solar_absorptance", "wwr", "shading_depth_m", "night_vent", "occupants", "weather", "cut_start_hour", "cut_length_h"];
   const p = Object.fromEntries(keys.map(k => [k, state[k]]));
   if (model) Object.assign(p, model.geometry);   // dims, orientation and glass per wall
   if (model?.plan_id) { p.plan_id = model.plan_id; if (model.party) p.party_walls = model.party; }
@@ -564,7 +595,7 @@ function pickHour() {
 function render() {
   $("loading").hidden = true;
   const p = JSON.parse(ranFor);
-  const key = JSON.stringify([p.plan_id || "box", p.weather, p.cut_start_hour]);
+  const key = JSON.stringify([p.plan_id || "box", p.weather, p.cut_start_hour, p.cut_length_h]);
   const fresh = key !== hourFor;                    // a new model or scenario: jump to its critical hour
   if (fresh) { hour = pickHour(); hourFor = key; }
   const draw = () => window.OASIS3D.show(result.unit, { keepView: true, hour });
@@ -581,6 +612,7 @@ function render() {
   renderPeaks();
   renderTrail();
   renderChanges();
+  renderPackages();
   renderCompare();
   renderCheck();
   renderBasis();
@@ -619,7 +651,7 @@ function renderScore() {
   const cutTotal = result.cut.filter(Boolean).length;
   const p = result.peaks;
   const cutStat = cutTotal
-    ? `<div class="stat"><span>Power-cut hours in danger</span><b>${s.cut_hours_in_danger}<small> of ${cutTotal}</small></b><em>${pad(p.cut.start_hour)}:00–${pad(p.cut.end_hour % 24)}:00, fan off</em></div>`
+    ? `<div class="stat"><span>Power-cut hours in danger</span><b>${s.cut_hours_in_danger}<small> of ${cutTotal}</small></b><em>${p.cut.length_h >= 24 ? "no power all week" : `${pad(p.cut.start_hour)}:00–${pad(p.cut.end_hour % 24)}:00`}, fan off</em></div>`
     : `<div class="stat"><span>Power cut</span><b>none</b><em>fans run every hour</em></div>`;
   const ext = s.safe_hours_extended_hi;
   $("stats").innerHTML = `
@@ -628,7 +660,27 @@ function renderScore() {
     <div class="stat"><span>Peak felt heat</span><b>${s.max_heat_index_c}<small> °C</small></b><em>${p ? `room hottest around ${pad(p.normal.typical_hour)}:00` : "heat index"}</em></div>
     <div class="stat"><span>Peak indoor air</span><b>${s.max_indoor_temp_c}<small> °C</small></b><em>mean ${s.mean_indoor_temp_c} °C</em></div>
     <div class="stat"><span>Heat over the limit</span><b>${Math.round(s.degree_hours_over_limit)}<small> °C·h</small></b><em>degree-hours above ${lim} °C</em></div>
-    <div class="stat"><span>Cross-check</span><b>${ext ?? "–"}<small> h safe</small></b><em>extended heat index</em></div>`;
+    <div class="stat"><span>Cross-check</span><b>${ext ?? "–"}<small> h safe</small></b><em>extended heat index</em></div>
+    <div class="stat"><span>Heat dose</span><b>${Math.round(s.hazard_hours_ch).toLocaleString()}<small> °C·h</small></b><em>felt heat above ${OPT.scenario.dose.caution_c} °C, summed</em></div>
+    <div class="stat"><span>Illness likely after</span><b>${doseTime(s.hours_to_elderly_limit)}</b><em>elderly; adults ${doseTime(s.hours_to_young_limit).replace("Not", "not")}</em></div>`;
+  renderBands();
+}
+
+// When the week's running heat dose passes a Chen et al. (2024) limit
+function doseTime(h) {
+  if (h === null || h === undefined) return "Not reached";
+  return `${dayName(Math.floor((h - 1) / 24))}, ${pad((h - 1) % 24)}:00`;
+}
+
+// Hours of the week in each NWS heat-index band
+const BAND_NAMES = { below_caution: "Below 27", caution: "Caution 27–32", extreme_caution: "Extreme caution 32–41",
+  danger: "Danger 41–54", extreme_danger: "Extreme danger 54+" };
+function renderBands() {
+  const rows = Object.entries(BAND_NAMES).map(([k, name]) => [k, name, result.summary[`band_${k}_h`] || 0]);
+  $("bands").innerHTML = rows.filter(r => r[2]).map(([k, name, n]) =>
+    `<i class="band b-${k}" style="flex:${n}" title="${name} °C: ${n} h"></i>`).join("");
+  $("bands-key").innerHTML = rows.filter(r => r[2]).map(([k, name, n]) =>
+    `<span><i class="band b-${k}"></i>${name} · <b>${n} h</b></span>`).join("");
 }
 
 // Two peaks: the normal daily peak, and the peak during the power cut.
@@ -639,12 +691,12 @@ function renderPeaks() {
   const lim = limit(), n = p.normal, c = p.cut, w = p.by_hour[p.worst_cut_hour], days = p.days;
   $("peaks").innerHTML = `
     <div class="peak"><span>Normal peak, fan on</span><b>${pad(n.typical_hour)}:00 · ${n.max_heat_index_c} °C</b><em>felt heat; air up to ${n.max_indoor_temp_c} °C</em></div>
-    ${c ? `<div class="peak"><span>During the ${pad(c.start_hour)}:00 cut</span><b>${c.max_heat_index_c} °C</b><em>above ${lim} °C on ${c.nights_in_danger} of ${c.days} days</em></div>` : ""}
+    ${c ? `<div class="peak"><span>During the ${c.length_h >= 24 ? "week without power" : `${pad(c.start_hour)}:00 cut`}</span><b>${c.max_heat_index_c} °C</b><em>above ${lim} °C on ${c.nights_in_danger} of ${c.days} days</em></div>` : ""}
     <div class="peak"><span>Worst hour for a cut</span><b>${pad(w.hour)}:00 · ${w.max_heat_index_no_fan_c} °C</b><em>above the limit on ${w.days_in_danger} of ${days} days</em></div>`;
   const hiMin = 30, hiMax = Math.max(...p.by_hour.map(r => r.max_heat_index_no_fan_c), lim + 5);
   $("cutscan").innerHTML = p.by_hour.map(r => {
     const hgt = Math.max(4, Math.round(100 * (r.max_heat_index_no_fan_c - hiMin) / (hiMax - hiMin)));
-    const cut = c && r.hour >= c.start_hour && r.hour < c.end_hour;
+    const cut = c && isCut(r.hour);
     return `<div class="cs-col${cut ? " cut" : ""}${r.hour === n.typical_hour ? " peak-h" : ""}" title="${pad(r.hour)}:00 · fan off: up to ${r.max_heat_index_no_fan_c} °C felt · ${r.days_in_danger}/${days} days above ${lim} °C">
       <span class="cs-n">${r.days_in_danger || ""}</span>
       <span class="cs-bar" style="height:${hgt}%;background:${cellColour(r.max_heat_index_no_fan_c)}"></span>
@@ -694,15 +746,49 @@ function renderChanges() {
 
 function setPreview(c) {
   preview = c;
-  $("compare").value = c ? String(result.changes.indexOf(c)) : "";
-  renderChanges(); renderWeek(); renderChart(); setHour(hour);
+  $("compare").value = previewKey(c);
+  renderChanges(); renderPackages(); renderWeek(); renderChart(); setHour(hour);
+}
+
+// Packages: the best single changes simulated together
+function renderPackages() {
+  const list = result.packages || [];
+  $("packages-block").hidden = !list.length;
+  if (!list.length) return;
+  const maxGain = Math.max(1, ...list.map(k => k.safe_hours_gained), ...list.map(k => k.sum_of_single_gains));
+  $("packages").innerHTML = list.map((k, i) => {
+    const g = k.safe_hours_gained, lost = k.sum_of_single_gains - g;
+    return `<li class="change${preview === k ? " on" : ""}" data-i="${i}" title="Click to compare in the timeline">
+      <span class="what">${k.changes.map(c => `${esc(c.title)}: ${esc(c.label)}`).join(" + ")}
+        <small>${k.safe_hours} safe h · peak ${k.max_heat_index_c} °C · dose ${Math.round(k.hazard_hours_ch).toLocaleString()} °C·h</small>
+        <small>On their own these add up to ${signed(k.sum_of_single_gains)} h${lost > 0 ? `: ${lost} h overlap` : lost < 0 ? `: ${-lost} h more together` : ""}</small></span>
+      <span class="gain ${g > 0 ? "up" : g < 0 ? "down" : "muted"}">${signed(g)} h</span>
+      <span class="bar"><i style="width:${(Math.max(0, g) / maxGain * 100).toFixed(1)}%"></i></span>
+      <button type="button" class="btn btn-outline btn-sm" data-pack="${i}">Apply</button>
+    </li>`;
+  }).join("");
+  $("packages").querySelectorAll("[data-pack]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); applyPackage(list[+b.dataset.pack]); }));
+  $("packages").querySelectorAll(".change").forEach(li => li.addEventListener("click", () => {
+    const k = list[+li.dataset.i];
+    setPreview(preview === k ? null : k);
+  }));
+}
+
+function applyPackage(k) {
+  for (const c of k.changes) state[c.parameter] = c.value;
+  pendingLabel = `Package: ${k.label}`;
+  preview = null;
+  syncForm();
+  simulate();
 }
 
 function renderCompare() {
   const sel = $("compare");
   sel.innerHTML = `<option value="">No change</option>` + result.changes.map((c, i) =>
-    `<option value="${i}">${esc(c.title)}: ${esc(c.label)} (${signed(c.safe_hours_gained)} h)</option>`).join("");
-  sel.value = preview ? String(result.changes.indexOf(preview)) : "";
+    `<option value="c${i}">${esc(c.title)}: ${esc(c.label)} (${signed(c.safe_hours_gained)} h)</option>`).join("")
+    + (result.packages || []).map((k, i) =>
+      `<option value="p${i}">${esc(k.title)}: ${esc(k.label)} (${signed(k.safe_hours_gained)} h)</option>`).join("");
+  sel.value = previewKey(preview);
 }
 
 // ----- Week grid (Summary) -------------------------------------------------
@@ -948,7 +1034,8 @@ function renderBasis() {
       p.night_vent ? "What homes without AC do; every calibration home had its windows open."
         : "Not validated: no monitored home shut its windows at night. Treat this case with care."),
     row("Ceiling fan", "Standard", `Cooling effect about ${sc.fan_credit_c} °C at ${sc.fan_air_speed_ms} m/s`, "ASHRAE 55-2023 (SET method), worked out every hour from the room's air, radiant temperature and humidity. Off during the power cut."),
-    row("Power cut", "Chosen", p.cut_start_hour === null || p.cut_start_hour === undefined ? "None" : `${pad(p.cut_start_hour)}:00–${pad((p.cut_start_hour + 1) % 24)}:00 every day`, "A scenario, not a forecast. The summary also shows the worst hour of the day for a cut."),
+    row("Power cut", "Chosen", p.cut_start_hour === null || p.cut_start_hour === undefined ? "None" : p.cut_length_h >= 24 ? "No power all week" : `${pad(p.cut_start_hour)}:00–${pad((p.cut_start_hour + (p.cut_length_h || 1)) % 24)}:00 every day`, "A scenario, not a forecast: one hour is evening load shedding, the long cases follow the outage studies (Chen 2024, Shi 2025). The cut only takes the fan away. The summary also shows the worst hour of the day for a cut."),
+    row("Heat dose", "Literature", `Felt heat above ${sc.dose.caution_c} °C, summed: ${Math.round(s.hazard_hours_ch).toLocaleString()} °C·h this week`, `Chen et al. 2024: illness likely above ${sc.dose.elderly_ch} °C·h (elderly) and ${sc.dose.young_ch.toLocaleString()} °C·h (young adults), or a peak near ${sc.dose.hi_max_c} °C. From a body model in a 7-day Guangzhou outage; not checked on Indian occupants. Here the fan's cooling effect is already taken off the felt heat.`),
     row("Safe limit", "Chosen", `Heat index below ${sc.safe_limit_c} °C`, `US NWS “Danger” band. Cross-check with the extended heat index (Lu &amp; Romps 2022): ${s.safe_hours_extended_hi ?? "–"} safe hours, peak ${s.max_extended_hi_c ?? "–"} °C. The NWS value is the more cautious count.`),
     row("Constructions", "Standard", `Wall U ${wall.u_value} · roof U ${roof.u_value} W/m²K · glass U ${ph.glass_u}`, `Wall ${wall.heat_capacity_kj} and roof ${roof.heat_capacity_kj} kJ/m²K heat capacity. Material values from BIS SP 41.`),
   ];
@@ -972,7 +1059,7 @@ function renderBasis() {
 // ---------------------------------------------------------------------------
 function bindTimeline() {
   bindStrip();
-  $("compare").addEventListener("change", e => setPreview(e.target.value === "" ? null : result.changes[+e.target.value]));
+  $("compare").addEventListener("change", e => setPreview(previewFrom(e.target.value)));
   $("play").addEventListener("click", togglePlay);
   $("step-back").addEventListener("click", () => setHour((hour + HOURS - 1) % HOURS));
   $("step-fwd").addEventListener("click", () => setHour((hour + 1) % HOURS));
