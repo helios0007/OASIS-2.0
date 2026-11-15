@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="style.css?v=8.0">
+  <link rel="stylesheet" href="style.css?v=8.2">
   <link rel="stylesheet" href="viewer3d.css?v=8.0">
   <script type="importmap">
   { "imports": {
@@ -40,6 +40,10 @@
 
   <header class="titlebar">
     <button type="button" class="brand" id="home" aria-label="Back to the intro">OASIS <span class="hot">2.0</span></button>
+    <div class="modes" role="tablist" aria-label="Scale">
+      <button type="button" role="tab" class="mode" data-mode="home" aria-selected="true">Home</button>
+      <button type="button" role="tab" class="mode" data-mode="urban" aria-selected="false">Neighbourhood</button>
+    </div>
     <span class="doc" id="doc-name">Single room</span>
 
     <nav class="menubar" aria-label="File">
@@ -251,6 +255,58 @@
     </aside>
   </div>
 
+
+  <!-- ================= NEIGHBOURHOOD (urban layer) ================= -->
+  <div class="workspace" id="urban" hidden>
+    <aside class="panel left" aria-label="Place">
+      <div class="panel-title"><span>Place</span></div>
+      <form id="u-form" autocomplete="off" class="panel-scroll">
+        <details class="sec" open>
+          <summary>Where</summary>
+          <div class="sec-body">
+            <label class="control"><span class="control-label">Start from</span>
+              <select class="select" id="u-place"></select></label>
+            <div class="props">
+              <label class="prop"><span>Name</span><input type="text" id="u-name" maxlength="80"></label>
+              <label class="prop"><span>Latitude</span><span class="unit"><input type="number" id="u-lat" min="12.6" max="13.5" step="0.0001"><i>°N</i></span></label>
+              <label class="prop"><span>Longitude</span><span class="unit"><input type="number" id="u-lon" min="79.9" max="80.4" step="0.0001"><i>°E</i></span></label>
+              <label class="prop"><span>Radius</span><span class="unit"><input type="number" id="u-radius" min="100" max="500" step="50" value="250"><i>m</i></span></label>
+              <label class="prop"><span>Storeys where the map has none</span><span class="unit"><input type="number" id="u-storeys" min="1" max="30" step="1" value="3"><i>fl.</i></span></label>
+            </div>
+            <p class="hint sm muted u-hint">Preset coordinates are approximate. Check them against your site.</p>
+            <button type="button" class="btn btn-outline u-wide" id="u-read">Read the map</button>
+          </div>
+        </details>
+        <details class="sec" open>
+          <summary>Urban form</summary>
+          <div class="sec-body">
+            <div class="props">
+              <label class="prop"><span>Ground covered by buildings</span><span class="unit"><input type="number" id="u-coverage" min="5" max="90" step="1"><i>%</i></span></label>
+              <label class="prop"><span>Mean building height</span><span class="unit"><input type="number" id="u-height" min="3" max="100" step="0.5"><i>m</i></span></label>
+              <label class="prop"><span>Facade area ÷ ground area</span><span class="unit"><input type="number" id="u-facade" min="0.05" max="4" step="0.01"><i>×</i></span></label>
+              <label class="prop"><span>Tree cover</span><span class="unit"><input type="number" id="u-trees" min="0" max="80" step="1" value="10"><i>%</i></span></label>
+              <label class="prop"><span>Grass cover</span><span class="unit"><input type="number" id="u-grass" min="0" max="80" step="1" value="5"><i>%</i></span></label>
+            </div>
+            <p class="hint sm muted u-hint" id="u-form-note">Read the map to fill these in from satellite building heights, or type them.</p>
+            <button type="button" class="btn btn-primary u-wide" id="u-run" disabled>Run urban model</button>
+          </div>
+        </details>
+      </form>
+    </aside>
+
+    <section class="center u-center">
+      <div class="u-map" id="u-map"><p class="muted" id="u-map-empty">Pick a place and read the map to see its buildings.</p></div>
+      <p class="u-map-key sm muted" id="u-map-key"></p>
+    </section>
+
+    <aside class="panel right" aria-label="Urban result">
+      <div class="panel-title"><span>Outdoor air at this place</span></div>
+      <div class="panel-scroll u-result" id="u-result">
+        <p class="muted sm lead">The urban model turns the airport heatwave week into the air of this street. The result is handed to the Home tab as the outdoor air "Site".</p>
+      </div>
+    </aside>
+  </div>
+
   <footer class="statusbar">
     <span class="status" id="status" role="status"><i></i><span id="status-text">Connecting</span></span>
     <span class="sb-item" id="sb-engine">EnergyPlus 26.2</span>
@@ -285,7 +341,8 @@
 <!-- Toasts -->
 <ol class="toaster" id="toaster" aria-live="polite"></ol>
 
-<script src="app.js?v=8.1"></script>
+<script src="app.js?v=8.3"></script>
+<script src="urban.js?v=8.4"></script>
 <script type="module" src="viewer3d.js?v=8.0"></script>
 </body>
 </html>

@@ -202,8 +202,8 @@ footer { color: var(--fg-2); font-size: 13px; border-top: 1px solid var(--line);
     <p class="lede">The complete tool has two layers. The city layer says where heat risk is highest and passes the local conditions down. The home layer, which is this thesis, says how long a home stays safe and what fixes it. Inputs flow through nine process steps to the outputs.</p>
 
     <div class="layers">
-      <div class="card"><h3>Layer 0 · neighbourhood and city <span class="pill plan">Planned for Chennai</span></h3>
-        <p>HVRA 1.0: heat vulnerability per building, urban heat island, neighbour shading, street microclimate. It exists for Barcelona; the cadastre and census loaders need Indian sources.</p>
+      <div class="card"><h3>Layer 0 · neighbourhood and city <span class="pill part">First version</span></h3>
+        <p>HVRA 1.0: heat vulnerability per building, urban heat island, neighbour shading, street microclimate. It exists for Barcelona. For Chennai, a first Neighbourhood tab reads satellite building heights (Google Open Buildings 2.5D) and OpenStreetMap outlines, runs the Urban Weather Generator to get street air, and passes neighbour shading to the single-room model. Wind is worked out but not passed on; the vulnerability score is not built.</p>
         <div class="gives"><b>Passes down</b>local air temperature, shading, wind and a vulnerability score per building</div></div>
       <div class="card"><h3>Layer 1 · building, flat and room <span class="pill part">MVP running</span></h3>
         <p>OASIS: safe hours in a heatwave with a power cut, and the design changes that add them. Today it stands on measured airport and city-centre weather in place of Layer 0.</p>
@@ -223,10 +223,10 @@ footer { color: var(--fg-2); font-size: 13px; border-top: 1px solid var(--line);
         <div class="item"><span class="k">B</span><span class="n">Home geometry</span><span class="pill part">Partly</span><span class="d">Typed choices, Rhino room, room-by-room plan. No IFC, no plan image or DXF.</span></div>
         <div class="item"><span class="k">C</span><span class="n">Envelope and materials</span><span class="pill part">Partly</span><span class="d">Three walls, four roof build-ups, roof colour, overhang. One glass type, no defaults by construction year.</span></div>
         <div class="item"><span class="k">D</span><span class="n">Place in the building</span><span class="pill part">Partly</span><span class="d">Top or middle floor; shared walls in plans. No corridors, shafts or courtyards.</span></div>
-        <div class="item"><span class="k">E</span><span class="n">Urban context</span><span class="pill plan">Planned</span><span class="d">Comes from Layer 0. Stand-in today: city-centre and street-AC air cases.</span></div>
+        <div class="item"><span class="k">E</span><span class="n">Urban context</span><span class="pill part">Partly</span><span class="d">Street air temperature from the Neighbourhood tab (modelled, no sea breeze), beside the measured city-centre case; neighbour shading from satellite building heights (single room only). No wind or vulnerability score.</span></div>
         <div class="item"><span class="k">F</span><span class="n">Occupants</span><span class="pill part">Partly</span><span class="d">Age, sex and routine per person. No health or mobility details; children have no body model.</span></div>
         <div class="item"><span class="k">G</span><span class="n">Systems and backup power</span><span class="pill part">Partly</span><span class="d">Ceiling fan only. No AC, coolers, inverter battery, solar or cooking heat.</span></div>
-        <div class="item"><span class="k">H</span><span class="n">Grid and power cuts</span><span class="pill part">Partly</span><span class="d">A chosen start hour and length. No measured outage statistics for the feeder.</span></div>
+        <div class="item"><span class="k">H</span><span class="n">Grid and power cuts</span><span class="pill part">Partly</span><span class="d">A chosen start hour and length, shown beside measured cuts in 18 monitored Chennai homes (Prayas ESMI, 2015–2018). Nothing for the home's own feeder.</span></div>
         <div class="item"><span class="k">I</span><span class="n">Behaviour</span><span class="pill part">Partly</span><span class="d">Windows open or shut at night. No curtains, roof wetting or sleeping on the terrace.</span></div>
         <div class="item"><span class="k">J</span><span class="n">Cost and constraints</span><span class="pill part">Partly</span><span class="d">Cost per change, two published rates and the rest estimates. No budget, tenure or new-versus-existing mode.</span></div>
       </div>
@@ -234,7 +234,7 @@ footer { color: var(--fg-2); font-size: 13px; border-top: 1px solid var(--line);
       <div class="col">
         <h3>Process<small>what happens to the inputs</small></h3>
         <div class="item"><span class="k">1</span><span class="n">Intake and defaults</span><span class="pill part">Partly</span><span class="d">Reads the three geometry inputs and fills the baseline. No lookup by era or climate zone.</span></div>
-        <div class="item"><span class="k">2</span><span class="n">Urban grounding</span><span class="pill plan">Planned</span><span class="d">Adjust the weather with Layer 0. Today the weather file is shifted by measured station offsets.</span></div>
+        <div class="item"><span class="k">2</span><span class="n">Urban grounding</span><span class="pill part">Partly</span><span class="d">The weather file takes street air from the urban model, or measured station offsets. The model ran 0.8 °C too warm at night against the one Chennai station.</span></div>
         <div class="item"><span class="k">3</span><span class="n">Build the thermal model</span><span class="pill built">Built</span><span class="d">Single room and multi-room models, calibrated physics.</span></div>
         <div class="item"><span class="k">4</span><span class="n">Scenario</span><span class="pill part">Partly</span><span class="d">Recorded heatwave and a chosen cut. No AC or backup schedules.</span></div>
         <div class="item"><span class="k">5</span><span class="n">Simulate</span><span class="pill built">Built</span><span class="d">EnergyPlus for the result, the AI estimate before a run.</span></div>

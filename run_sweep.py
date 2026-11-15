@@ -58,7 +58,7 @@ def run_one(job):
 def main():
     from oasis import scenario
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weather", default=scenario.DEFAULT_WEATHER, choices=list(scenario.WEATHERS))
+    parser.add_argument("--weather", default=scenario.DEFAULT_WEATHER, choices=list(scenario.WEATHERS) + ["site"])
     weather = parser.parse_args().weather
     epw = scenario.weather_file(weather)
     tag = "" if weather == scenario.DEFAULT_WEATHER else f"_{weather}"

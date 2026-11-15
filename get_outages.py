@@ -1,13 +1,14 @@
-"""Measured power cuts for one monitor, from the Prayas ESMI voltage records.
+"""Measured power cuts in Chennai homes, from the Prayas ESMI voltage records.
 
-    python get_outages.py                       # "Chennai" in data/outages/
+    python get_outages.py                       # all Chennai-area monitors in data/outages/
     python get_outages.py --location Gopalapuram
     python get_outages.py --test                # made-up file, checks the reader only
 
 The files are not downloaded here: Harvard Dataverse asks each user to sign a
-guestbook form. Download the "ESMI minute-wise voltage data ..." files from
+guestbook form. Download the "ESMI minute-wise voltage data ..." files and the
+location file from
 https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/CLLZZM
-and put them in data/outages/. Output: outputs/outages/summary.json.
+and put them in data/outages/ (not in git: 2.4 GB). Output: outputs/outages/summary.json.
 """
 import argparse
 import json
@@ -20,6 +21,7 @@ import config
 from oasis import outages
 
 DATA = config.ROOT / "data" / "outages"
+LOCATIONS = DATA / "ESMI location information.csv"
 
 
 def synthetic(path):
@@ -65,39 +67,47 @@ def check_reader():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--location", default="Chennai")
+    ap.add_argument("--location", default=None, help="name contains this; default: all Chennai-area monitors")
     ap.add_argument("--test", action="store_true")
     a = ap.parse_args()
     if a.test:
         return check_reader()
 
+    # The 2019 files are left out: one lost its hour column, the other drops all-zero hours.
     files = sorted(f for f in DATA.glob("*") if f.suffix.lower() in (".tab", ".csv", ".tsv")
-                   and "location information" not in f.name.lower()) if DATA.exists() else []
+                   and "location information" not in f.name.lower() and "2019" not in f.name) if DATA.exists() else []
     if not files:
         raise SystemExit(f"No ESMI files in {DATA}. See the top of this script for the download page.")
-    rows = pd.concat([outages.read_location(f, a.location) for f in files], ignore_index=True)
+    if a.location:
+        rows = pd.concat([outages.read_location(f, a.location) for f in files], ignore_index=True)
+    else:
+        names = outages.chennai_monitors(LOCATIONS)
+        rows = pd.concat([outages.read_locations(f, names) for f in files], ignore_index=True)
     if rows.empty:
-        raise SystemExit(f"No location with '{a.location}' in its name in {len(files)} file(s).")
-    volts = outages.minute_series(rows)
+        raise SystemExit(f"No matching monitor in {len(files)} file(s).")
+    series = {name: outages.minute_series(g) for name, g in rows.groupby("Location name")}
+    pooled = list(series.values())
     summary = {
         "source": "Prayas ESMI minute-wise voltage data, Harvard Dataverse doi:10.7910/DVN/CLLZZM",
-        "locations": sorted(rows["Location name"].astype(str).str.strip().unique()),
+        "area": a.location or "Chennai urban area (districts Chennai, Kancheepuram, Thiruvallur)",
+        "locations": sorted(series),
         "files": [f.name for f in files],
         "rules": {"no_supply_v": outages.NO_SUPPLY_V, "min_outage_min": outages.MIN_OUTAGE_MIN,
-                  "missing_data": "not counted as an outage"},
-        "warnings": ["The 2019 Jan-June file leaves out most all-zero hours, so its outages are undercounted."]
-                    if any(outages.ESMI_2019_JAN_JUN in f.name for f in files) else [],
-        "hot_season": outages.profile(volts),          # April-June
-        "all_year": outages.profile(volts, months=None),
+                  "missing_data": "not counted as an outage",
+                  "left_out": "2019 files (hour column lost / all-zero hours dropped)"},
+        "hot_season": outages.profile(pooled),               # April-June, all monitors pooled
+        "all_year": outages.profile(pooled, months=None),
+        "by_location_hot_season": {name: outages.profile(v) for name, v in series.items()},
     }
     outages.SUMMARY.parent.mkdir(parents=True, exist_ok=True)
     outages.SUMMARY.write_text(json.dumps(summary, indent=2))
     hot = summary["hot_season"]
-    print(f"{', '.join(summary['locations'])}: April-June, {hot['days_monitored']} days monitored")
+    print(f"{len(series)} monitors, April-June: {hot['days_monitored']} monitor-days")
     if hot["days_monitored"]:
-        print(f"  cuts per week {hot['interruptions_per_week']}, days with an evening cut "
-              f"{hot['share_of_days_with_evening_cut']:.0%}, median {hot['duration_min_median']} min, "
-              f"90th percentile {hot['duration_min_p90']} min, most common start hour {hot['most_common_start_hour']}")
+        print(f"  cuts per week {hot['interruptions_per_week']}, days with a cut {hot['share_of_days_with_cut']:.0%}, "
+              f"days with an evening cut {hot['share_of_days_with_evening_cut']:.0%}, median {hot['duration_min_median']} min, "
+              f"90th percentile {hot['duration_min_p90']} min, longest {hot['duration_min_max']} min, "
+              f"most common start hour {hot['most_common_start_hour']}")
     print("Saved", outages.SUMMARY)
 
 

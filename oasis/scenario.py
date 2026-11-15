@@ -6,6 +6,8 @@ Weather cases (all on the recorded heatwave, 1-7 May 2024):
               same week; check_city_weather.py)
     street_ac + 1 C at night beside AC outdoor units: literature upper case,
               not measured in Chennai (oasis/ac_heat.py)
+    site      the airport week passed through the urban weather model for one
+              place (oasis/urban.py); web tool only, not in WEATHERS
 
 Power cut: a list of hours of the day with no fan ([] = no cut), made by
 metrics.cut_hours_list from a start hour and a length (CUT_LENGTHS).
@@ -55,6 +57,12 @@ def weather_file(key):
     """The .epw for a weather case, written once into outputs/weather_cases/."""
     if key == "airport":
         return config.EPW
+    if key == "site":                     # the place set in the urban tab (oasis/urban.py)
+        from oasis import urban
+        site = urban.site()
+        if site is None:
+            raise ValueError("No neighbourhood has been set. Run the urban model first.")
+        return CASES / site["epw"]
     if key not in WEATHERS:
         raise ValueError(f"Unknown weather case '{key}'.")
     CASES.mkdir(parents=True, exist_ok=True)

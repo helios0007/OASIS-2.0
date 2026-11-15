@@ -15,6 +15,7 @@ import pandas as pd
 
 import config
 from oasis import scenario
+from oasis import urban
 from oasis.params import BASELINE, SWEEP_LEVELS
 
 TEMPLATE = config.ROOT / "tool" / "template.html"
@@ -64,7 +65,8 @@ def pack(weather):
 
 
 def main():
-    cases = {w: pack(w) for w in scenario.available()}
+    names = {**scenario.WEATHERS, **({"site": urban.site_weather()} if urban.site() else {})}
+    cases = {w: pack(w) for w in scenario.available() + (["site"] if "site" in names else [])}
     cases = {w: c for w, c in cases.items() if c}
     n = len(cases[scenario.DEFAULT_WEATHER]["runs"])
     data = {
@@ -74,7 +76,7 @@ def main():
         "first_day": config.RUN_START[1],
         "cut_hour": config.CUT_START_HOUR,
         "default_weather": scenario.DEFAULT_WEATHER,
-        "weathers": [{"key": w, **scenario.WEATHERS[w]} for w in cases],
+        "weathers": [{"key": w, **names[w]} for w in cases],
         "cases": {w: {"runs": c["runs"], "hi": c["hi"], "t_out": c["t_out"]} for w, c in cases.items()},
         "ymin": min(c["ymin"] for c in cases.values()),
         "ymax": max(c["ymax"] for c in cases.values()),

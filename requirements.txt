@@ -10,3 +10,6 @@ fastapi
 uvicorn
 python-multipart
 pythermalcomfort
+requests
+uwg
+rasterio

@@ -13,6 +13,7 @@ import streamlit.components.v1 as components
 
 import config
 from oasis import scenario
+from oasis import urban
 from oasis.agents import DEFAULT_AGENTS, simulate_household
 from oasis.assess import assess
 from oasis.build_idf import MATERIALS, ROOFS, WALLS
@@ -189,10 +190,12 @@ def main():
     # Scenario: which outdoor air, and when the one-hour power cut falls
     with st.sidebar:
         st.markdown("### 🌡️ 3. Scenario")
-        weathers = scenario.available()
+        # "site" = the place set in the web tool's Neighbourhood tab (oasis/urban.py), air only
+        cases = {**scenario.WEATHERS, **({"site": urban.site_weather()} if urban.site() else {})}
+        weathers = scenario.available() + (["site"] if "site" in cases else [])
         weather = st.selectbox("Outdoor air", weathers, index=weathers.index(scenario.DEFAULT_WEATHER),
-                               format_func=lambda k: f"{scenario.WEATHERS[k]['label']} ({scenario.WEATHERS[k]['source'].lower()})")
-        st.caption(scenario.WEATHERS[weather]["note"])
+                               format_func=lambda k: f"{cases[k]['label']} ({cases[k]['source'].lower()})")
+        st.caption(cases[weather]["note"])
         cut_options = [None] + list(range(24))
         cut_start = st.selectbox("Power cut (fans off)", cut_options, index=cut_options.index(config.CUT_START_HOUR),
                                  format_func=lambda h: "No power cut" if h is None else f"from {h:02d}:00")
@@ -233,7 +236,7 @@ def main():
         f"up to {c['max_indoor_temp_c']} °C air, {c['max_heat_index_c']} °C felt, above {SAFE_LIMIT_C:.0f} °C on "
         f"{c['nights_in_danger']}/{c['days']} days. ")
     st.caption(
-        f"**Outdoor air:** {scenario.WEATHERS[weather]['label']} ({scenario.WEATHERS[weather]['source'].lower()}). "
+        f"**Outdoor air:** {cases[weather]['label']} ({cases[weather]['source'].lower()}). "
         f"**Normal peak:** hottest around {n['typical_hour']:02d}:00 (up to {n['max_indoor_temp_c']} °C air, "
         f"{n['max_heat_index_c']} °C felt with the fan on). {cut_text}**Worst hour for a cut:** {w['hour']:02d}:00 "
         f"({w['max_heat_index_no_fan_c']} °C felt with the fan off, {w['days_in_danger']}/{pk['days']} days)."

@@ -32,7 +32,7 @@ It is a design-stage simulation and decision-support tool for new residential bu
 - **Interfaces (3 Front Ends)**:
   1. **Static HTML Tool** (`make_tool.py` + `tool/template.html` → `outputs/oasis_tool.html`): standalone lookup tool backed by the 1,512 pre-simulated sweep results for each outdoor-air case (airport / city centre / street AC, `oasis/scenario.py`).
   2. **Streamlit Local App** (`app.py`): interactive local UI supporting `.3dm` uploads and live EnergyPlus simulations, with the same outdoor-air and power-cut-hour scenario choices as the web tool.
-  3. **FastAPI + Vanilla JS Web Tool** (`run_server.py`, `backend/main.py`, `frontend/`): REST API (`/api/health`, `/api/options`, `/api/rhino`, `/api/assess`, `/api/predict`) and single-page web interface with live simulation, caching, and step-by-step intervention application.
+  3. **FastAPI + Vanilla JS Web Tool** (`run_server.py`, `backend/main.py`, `frontend/`): REST API (`/api/health`, `/api/options`, `/api/rhino`, `/api/assess`, `/api/predict`, `/api/urban`) and single-page web interface with live simulation, caching, and step-by-step intervention application. Two modes: **Home**, and **Neighbourhood** (`oasis/urban.py`, `frontend/urban.js`, `oasis/urban_heights.py`: Google Open Buildings 2.5D heights + OpenStreetMap footprints → urban form → Urban Weather Generator → outdoor air "Site" and neighbour shading for the Home tab).
 
 ### How to Run
 Run all commands from the project root (`D:\IAAC\OASIS 2.0`) using the `.venv` Python environment (`.venv\Scripts\activate` or `.venv\Scripts\python.exe`):

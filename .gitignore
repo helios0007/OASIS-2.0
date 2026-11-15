@@ -38,3 +38,10 @@ outputs/roof_test/
 
 # Review deck: figures cropped from published papers (not ours to publish)
 docs/deck/review3_figs/*_fig*.png
+
+# ESMI voltage records (2.4 GB; download from Harvard Dataverse, see get_outages.py)
+data/outages/
+# Urban tab: map and satellite caches, and the current site (remade from the tab)
+outputs/urban/
+# Urban tab: the current site's weather file (remade by Run urban model)
+outputs/weather_cases/chennai_heatwave_site_*.epw

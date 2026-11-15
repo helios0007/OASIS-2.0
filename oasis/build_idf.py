@@ -269,14 +269,45 @@ def add_neighbours(idf, p):
         "east":  [(L + g, -e, top), (L + g, -e, 0), (L + g, W + e, 0), (L + g, W + e, top)],
         "west":  [(-g, W + e, top), (-g, W + e, 0), (-g, -e, 0), (-g, -e, top)],
     }
-    for side in p.get("shaded_walls", ()):
+    def add_plane(side, vertices):
         s = idf.newidfobject("SHADING:BUILDING:DETAILED", Name=f"neighbour_{side}",
                              Number_of_Vertices=4)
-        for i, (x, y, z) in enumerate(planes[side], start=1):
+        for i, (x, y, z) in enumerate(vertices, start=1):
             setattr(s, f"Vertex_{i}_Xcoordinate", x)
             setattr(s, f"Vertex_{i}_Ycoordinate", y)
             setattr(s, f"Vertex_{i}_Zcoordinate", z)
 
+    for side in p.get("shaded_walls", ()):
+        add_plane(side, planes[side])
+
+    # Neighbours read from the urban layer (oasis/urban.py): p["surroundings"] holds
+    # sight lines from the site (bearing, gap to the next building, its height) and
+    # the height of the building this flat is in. Each outside wall takes the sight
+    # line nearest to the way it faces; heights are measured from this flat's floor.
+    around = p.get("surroundings")
+    if not around:
+        return
+    top_floor = p.get("floor", "top") == "top"
+    floor_z = max(around["building_m"] - H, 0) * (1.0 if top_floor else 0.5)
+    for side, facing in FACING.items():
+        if side in p.get("shared_walls", ()) or side in p.get("shaded_walls", ()):
+            continue
+        b = (facing + p["orientation_deg"]) % 360
+        ray = min(around["rays"], key=lambda r: min(abs(r["bearing"] - b), 360 - abs(r["bearing"] - b)))
+        if ray["gap_m"] is None or ray["gap_m"] > NEIGHBOUR_REACH_M:
+            continue
+        g, t = ray["gap_m"], ray["height_m"] - floor_z
+        if t < 0.5:                      # the neighbour does not rise above this flat's floor
+            continue
+        add_plane(side, {
+            "south": [(-e, -g, t), (-e, -g, 0), (L + e, -g, 0), (L + e, -g, t)],
+            "north": [(L + e, W + g, t), (L + e, W + g, 0), (-e, W + g, 0), (-e, W + g, t)],
+            "east":  [(L + g, -e, t), (L + g, -e, 0), (L + g, W + e, 0), (L + g, W + e, t)],
+            "west":  [(-g, W + e, t), (-g, W + e, 0), (-g, -e, 0), (-g, -e, t)],
+        }[side])
+
+
+NEIGHBOUR_REACH_M = 30.0   # a building further away than this is not treated as shading a wall
 
 # Direction each wall faces (degrees from north, clockwise) at orientation 0
 FACING = {"north": 0, "east": 90, "south": 180, "west": 270}

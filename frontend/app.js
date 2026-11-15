@@ -199,6 +199,17 @@ function cutOptionsHtml() {
   return html;
 }
 
+// Measured power cuts (get_outages.py), shown beside the chosen cut
+function outageText() {
+  const m = OPT.scenario.measured_outages, h = m?.hot_season;
+  if (!h || !h.days_monitored) return "";
+  return `In ${h.monitors} monitored Chennai homes (April–June ${h.first_day.slice(0, 4)}–${h.last_day.slice(0, 4)}), an evening cut came on ${Math.round(h.share_of_days_with_evening_cut * 100)}% of days and a cut at any hour on ${Math.round(h.share_of_days_with_cut * 100)}%. Half the cuts were over within ${Math.round(h.duration_min_median)} minutes; 1 in 10 lasted more than ${Math.round(h.duration_min_p90)} minutes.`;
+}
+function outageHint() {
+  const text = outageText();
+  return text ? `<p class="hint sm muted" style="margin-top:6px;line-height:1.45"><span class="tagline measured">Measured</span>${esc(text)} A cut every evening is the stress case.</p>` : "";
+}
+
 function buildForm() {
   for (const [id, controls] of Object.entries(SECTIONS)) $(id).innerHTML = controls.map(controlHtml).join("");
   $("ctl-scenario").innerHTML = `
@@ -209,6 +220,7 @@ function buildForm() {
     <label class="control"><span class="control-label">Cut length, every day</span>
       <select class="select" id="cut_length_h">${OPT.scenario.cut_lengths.map(c =>
         `<option value="${c.hours}">${esc(c.label)} · ${esc(c.note)}</option>`).join("")}</select></label>
+    ${outageHint()}
     <p class="hint sm muted" style="margin-top:6px;line-height:1.45">Recorded heatwave, ${OPT.scenario.first_day}–${OPT.scenario.last_day} ${OPT.scenario.month} 2024, after ${OPT.scenario.spinup_days} warm-up days.</p>`;
 
   $("form").addEventListener("change", e => {
@@ -1051,7 +1063,7 @@ function renderBasis() {
       p.night_vent ? "What homes without AC do; every calibration home had its windows open."
         : "Not validated: no monitored home shut its windows at night. Treat this case with care."),
     row("Ceiling fan", "Standard", `Cooling effect about ${sc.fan_credit_c} °C at ${sc.fan_air_speed_ms} m/s`, "ASHRAE 55-2023 (SET method), worked out every hour from the room's air, radiant temperature and humidity. Off during the power cut."),
-    row("Power cut", "Chosen", p.cut_start_hour === null || p.cut_start_hour === undefined ? "None" : p.cut_length_h >= 24 ? "No power all week" : `${pad(p.cut_start_hour)}:00–${pad((p.cut_start_hour + (p.cut_length_h || 1)) % 24)}:00 every day`, "A scenario, not a forecast: one hour is evening load shedding, the long cases follow the outage studies (Chen 2024, Shi 2025). The cut only takes the fan away. The summary also shows the worst hour of the day for a cut."),
+    row("Power cut", "Chosen", p.cut_start_hour === null || p.cut_start_hour === undefined ? "None" : p.cut_length_h >= 24 ? "No power all week" : `${pad(p.cut_start_hour)}:00–${pad((p.cut_start_hour + (p.cut_length_h || 1)) % 24)}:00 every day`, `A scenario, not a forecast: one hour is evening load shedding, the long cases follow the outage studies (Chen 2024, Shi 2025). The cut only takes the fan away. The summary also shows the worst hour of the day for a cut.${outageText() ? " Measured (Prayas ESMI voltage records): " + outageText() : ""}`),
     row("Heat dose", "Literature", `Felt heat above ${sc.dose.caution_c} °C, summed: ${Math.round(s.hazard_hours_ch).toLocaleString()} °C·h this week`, `Chen et al. 2024: illness likely above ${sc.dose.elderly_ch} °C·h (elderly) and ${sc.dose.young_ch.toLocaleString()} °C·h (young adults), or a peak near ${sc.dose.hi_max_c} °C. From a body model in a 7-day Guangzhou outage; not checked on Indian occupants. Here the fan's cooling effect is already taken off the felt heat.`),
     row("Safe limit", "Chosen", `Heat index below ${sc.safe_limit_c} °C`, `US NWS “Danger” band. Cross-check with the extended heat index (Lu &amp; Romps 2022): ${s.safe_hours_extended_hi ?? "–"} safe hours, peak ${s.max_extended_hi_c ?? "–"} °C. The NWS value is the more cautious count.`),
     ...(result.cost_basis && result.cost_basis.length ? [row("Costs", "Estimate", "Extra cost of each change on this home, new build",

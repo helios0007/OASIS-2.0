@@ -36,6 +36,8 @@ from oasis import scenario
 from oasis.assess import assess, assess_packages, single_changes
 from oasis import costs
 from oasis import outages
+from oasis import urban
+from oasis import urban_heights
 from oasis.box_view import box_unit
 from oasis.build_idf import (
     ACTIVITY_W, APPLIANCES_PEAK_W, GLASS_SHGC, GLASS_U,
@@ -128,7 +130,7 @@ def check_choices(b: Building):
         raise HTTPException(422, f"Unknown wall type '{b.wall}'.")
     if b.roof not in ROOFS:
         raise HTTPException(422, f"Unknown roof type '{b.roof}'.")
-    if b.weather not in scenario.available():
+    if b.weather not in scenario.available() and not (b.weather == "site" and urban.site()):
         raise HTTPException(422, f"Weather case '{b.weather}' is not available.")
     if b.party_walls not in (None, "windowless"):
         raise HTTPException(422, "party_walls must be empty or 'windowless'.")
@@ -175,7 +177,8 @@ def options():
             "fan_air_speed_ms": FAN_AIR_SPEED_MS,
             "spinup_days": config.SPINUP_DAYS,
             "weathers": [{"key": k, **v, "available": k in scenario.available()}
-                         for k, v in scenario.WEATHERS.items()],
+                         for k, v in scenario.WEATHERS.items()]
+                        + ([{"key": "site", **urban.site_weather(), "available": True}] if urban.site() else []),
         },
         "evidence": {
             "heatwave": load_json_if_exists(config.ROOT / "data" / "weather" / "chennai_heatwave.json"),
@@ -267,6 +270,82 @@ async def rhino(file: UploadFile = File(...)):
             raise HTTPException(400, "This file could not be read as a Rhino model.")
 
 
+class Place(BaseModel):
+    """A circle on the map (urban tab)."""
+    name: str = Field("Site", max_length=80)
+    lat: float = Field(..., ge=12.6, le=13.5)          # Chennai and its suburbs
+    lon: float = Field(..., ge=79.9, le=80.4)
+    radius_m: float = Field(250, ge=100, le=500)
+    default_storeys: float = Field(3, ge=1, le=30)     # for buildings with no height on the map
+
+
+class UrbanRun(Place):
+    """The urban form to run (read from the map, then edited by the user if needed)."""
+    site_coverage: float = Field(..., ge=0.05, le=0.9)
+    mean_height_m: float = Field(..., ge=3, le=100)
+    facade_to_site: float = Field(..., ge=0.05, le=4)
+    tree_cover: float = Field(0.1, ge=0, le=0.8)
+    grass_cover: float = Field(0.05, ge=0, le=0.8)
+    buildings: Optional[int] = None
+    height_tagged_share: float = Field(0, ge=0, le=1)
+    source: str = Field("map", pattern="^(map|satellite|typed)$")
+
+
+@app.get("/api/urban")
+def urban_state():
+    """Preset places and the neighbourhood currently handed to the home model."""
+    return {"places": urban.PLACES, "site": urban.site(), "floor_m": urban.FLOOR_M}
+
+
+@app.post("/api/urban/map")
+def urban_map(place: Place):
+    """The place as the data shows it: urban form and neighbours from the satellite
+    building heights, street-map footprints for the drawing. If the satellite data
+    cannot be read, the street map gives the form (with typed-in storeys)."""
+    notes, buildings, grid, around = [], [], None, None
+    try:
+        buildings = urban.fetch_buildings(place.lat, place.lon, place.radius_m)
+        osm_form = urban.morphology(buildings, place.radius_m, place.default_storeys)
+    except Exception as error:
+        osm_form = None
+        notes.append(f"Street map not available ({str(error).splitlines()[0]}).")
+    try:
+        share, height = urban_heights.height_grid(place.lat, place.lon, place.radius_m)
+        form = urban_heights.form(share, height, place.radius_m)
+        around = urban_heights.obstructions(share, height)
+        grid = {"cell_m": urban_heights.CELL_M, "half_m": place.radius_m + urban_heights.MARGIN_M,
+                "heights": [[int(round(v)) for v in row] for row in urban_heights.solid(share, height)]}
+    except Exception as error:
+        notes.append(f"Satellite building heights not available ({str(error).splitlines()[0]}).")
+        form = osm_form
+    if form is None:
+        raise HTTPException(502, " ".join(notes))
+    return {"form": form, "osm_form": osm_form, "grid": grid, "surroundings": around, "notes": notes,
+            "roughness": urban_heights.roughness(form),
+            "buildings": [{"xy": [[round(x, 1), round(y, 1)] for x, y in b["xy"]], "height_m": b.get("height_m"),
+                           "tagged": b["height_tag"] is not None, "inside": b.get("inside", False)} for b in buildings]}
+
+
+@app.post("/api/urban/run")
+def urban_run(run: UrbanRun):
+    """Run the urban weather model for this form and make it the "site" weather case."""
+    form = {"source": run.source, "site_coverage": run.site_coverage, "mean_height_m": run.mean_height_m,
+            "facade_to_site": run.facade_to_site, "buildings": run.buildings,
+            "height_tagged_share": run.height_tagged_share}
+    around = None
+    try:                                     # neighbours come from the cached satellite grid of this place
+        around = urban_heights.obstructions(*urban_heights.height_grid(run.lat, run.lon, run.radius_m))
+    except Exception:
+        pass
+    with SIMULATION_LOCK:
+        try:
+            site = urban.make_site(run.name, run.lat, run.lon, run.radius_m, form,
+                                   run.tree_cover, run.grass_cover, run.default_storeys, around)
+        except Exception as error:
+            raise HTTPException(500, f"The urban model failed: {str(error).splitlines()[0]}")
+    return {"site": site, "weather": {"key": "site", **urban.site_weather(), "available": True}}
+
+
 @app.post("/api/predict")
 def predict_building(b: Building):
     """Instant estimate from the surrogate (oasis/surrogate.py), before the simulation
@@ -293,8 +372,11 @@ def assess_building(b: Building):
         epw = scenario.weather_file(weather)
     except ValueError as error:
         raise HTTPException(422, str(error))
-    scen = {"weather": weather, "cut_hours": cut_hours}   # cut_hours already holds start and length
+    # cut_hours already holds start and length; the file name tells one neighbourhood from the next
+    scen = {"weather": weather, "cut_hours": cut_hours, "weather_file": epw.name}
     p = dict(BASELINE, **dumped)
+    if weather == "site" and not plan_id and urban.surroundings_for_home():
+        p["surroundings"] = urban.surroundings_for_home()      # neighbour shading from the urban layer
     if plan_id:
         return assess_plan_building(p, plan_id, party, custom_agents or DEFAULT_AGENTS, epw, scen)
     key = json.dumps([p, scen], sort_keys=True)
