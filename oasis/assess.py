@@ -55,6 +55,11 @@ def result_row(s, h, summary):
     return {
         "safe_hours": s["safe_hours"],
         "safe_hours_gained": s["safe_hours"] - summary["safe_hours"],
+        # the same gain with the room at the two ends of the model error band (metrics.TEMP_ERROR_C);
+        # the error belongs to the home, so both designs are shifted together
+        "safe_hours_low": s["safe_hours_low"], "safe_hours_high": s["safe_hours_high"],
+        "gain_if_warmer": s["safe_hours_low"] - summary["safe_hours_low"],
+        "gain_if_cooler": s["safe_hours_high"] - summary["safe_hours_high"],
         "cut_hours_in_danger": s["cut_hours_in_danger"],
         "max_heat_index_c": s["max_heat_index_c"],
         "degree_hours_over_limit": s["degree_hours_over_limit"],

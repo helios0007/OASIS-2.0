@@ -646,6 +646,13 @@ function cellColour(hi) {
 function renderScore() {
   const s = result.summary, lim = limit();
   $("score").textContent = s.safe_hours;
+  // Model error band: the same run scored with the room warmer and cooler by the home-to-home error
+  const band = $("score-range"), err = OPT.scenario.temp_error_c;
+  band.hidden = s.safe_hours_low === undefined;
+  if (!band.hidden) {
+    band.textContent = `Likely ${s.safe_hours_low}–${s.safe_hours_high} h`;
+    band.title = `The model's mean error differs from home to home by about ${err} °C (12 monitored homes). With the room ${err} °C warmer this design has ${s.safe_hours_low} safe hours, ${err} °C cooler ${s.safe_hours_high}.`;
+  }
   const R = 27, C = 2 * Math.PI * R;
   $("gauge").innerHTML = `<svg viewBox="0 0 64 64" width="64" height="64">
     <circle class="track" cx="32" cy="32" r="${R}" fill="none" stroke-width="7"/>
@@ -760,8 +767,12 @@ function renderChanges() {
   const shown = showAll ? list : list.slice(0, Math.max(1, Math.min(TOP_CHANGES, helpful || 1)));
   $("changes").innerHTML = shown.map((c, i) => {
     const g = c.safe_hours_gained;
+    // the gain at the two ends of the model error band; "sure" = it helps (or harms) at both ends
+    const ends = c.gain_if_warmer === undefined ? null : [c.gain_if_warmer, c.gain_if_cooler].sort((a, b) => a - b);
+    const sure = ends && g !== 0 && Math.sign(ends[0]) === Math.sign(g) && Math.sign(ends[1]) === Math.sign(g);
+    const bandText = !ends ? "" : ` · ${signed(ends[0])} to ${signed(ends[1])} h within model error${g !== 0 && !sure ? " (not certain)" : ""}`;
     return `<li class="change${preview === c ? " on" : ""}" data-i="${list.indexOf(c)}" title="Click to compare in the timeline">
-      <span class="what">${esc(c.title)}: ${esc(c.label)}${i === 0 && g > 0 ? `<span class="best">Best</span>` : ""}${c === value ? `<span class="best">Best value</span>` : ""}<small>now ${esc(labelOf(c.parameter, state[c.parameter]))} · ${c.safe_hours} safe h · peak ${c.max_heat_index_c} °C${costText(c)}</small></span>
+      <span class="what">${esc(c.title)}: ${esc(c.label)}${i === 0 && g > 0 ? `<span class="best">Best</span>` : ""}${c === value ? `<span class="best">Best value</span>` : ""}<small>now ${esc(labelOf(c.parameter, state[c.parameter]))} · ${c.safe_hours} safe h · peak ${c.max_heat_index_c} °C${bandText}${costText(c)}</small></span>
       <span class="gain ${g > 0 ? "up" : g < 0 ? "down" : "muted"}">${signed(g)} h</span>
       <span class="bar${g < 0 ? " neg" : ""}"><i style="width:${(Math.abs(g) / maxGain * 100).toFixed(1)}%"></i></span>
       <button type="button" class="btn btn-outline btn-sm" data-apply="${list.indexOf(c)}">Apply</button>
@@ -1063,6 +1074,8 @@ function renderBasis() {
       esc(w.note) + (hw ? ` Week mean outdoor heat index ${hw.week_stats.mean_heat_index_c} °C (typical-year file: ${hw.typical_year_week.mean_heat_index_c} °C). ${hw.hours_from_station}/${hw.hours_needed} hours from the station; sunlight from ERA5.` : "")),
     row("Building physics", "Calibrated", cal ? `Internal mass ${cal.adopted.internal_mass_m2} m², appliances ${cal.adopted.appliances_peak_w} W, AirflowNetwork` : "Calibrated defaults",
       cal ? `Fitted on ${cal.homes} monitored Dhaka homes: hourly error ${cal.adopted_scores.fit_rmse} °C (check period ${cal.adopted_scores.check_rmse} °C). Checked on Delhi homes without refitting.` : ""),
+    ...(s.safe_hours_low === undefined ? [] : [row("Model error", "Measured", `${s.safe_hours_low}–${s.safe_hours_high} safe hours with the room ${sc.temp_error_c} °C warmer or cooler`,
+      `In the 12 monitored homes the model's mean error differs from home to home by ${sc.temp_error_c} °C (one standard deviation). That part does not average out over a week, so every score and every gain is repeated at both ends. The hour-to-hour error and the model's mean warm lean (+0.3 °C) are not in the range.`)]),
     row("Window use", p.night_vent ? "Observed" : "Chosen", p.night_vent ? "Open day and night" : "Shut 22:00–06:00",
       p.night_vent ? "What homes without AC do; every calibration home had its windows open."
         : "Not validated: no monitored home shut its windows at night. Treat this case with care."),

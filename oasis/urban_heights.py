@@ -12,6 +12,7 @@ Gives the urban layer three things the street map cannot:
 
 Heights are model estimates from satellite images, not surveyed.
 """
+import hashlib
 import json
 import math
 
@@ -109,21 +110,41 @@ def height_grid(lat, lon, radius_m):
     return share.astype(np.float32), mean_h.astype(np.float32)
 
 
+def in_area(x_m, y_m, radius_m, zone=None):
+    """True where a point (metres east / north of the centre) is inside the analysis area:
+    the circle, or the zone drawn on the map (list of [x_m, y_m] corners) if there is one."""
+    x, y = np.broadcast_arrays(np.asarray(x_m, float), np.asarray(y_m, float))
+    if not zone:
+        return np.hypot(x, y) <= radius_m
+    from matplotlib.path import Path
+    return Path(zone).contains_points(np.column_stack([x.ravel(), y.ravel()])).reshape(x.shape)
+
+
+def grid_area(n, cell_m, radius_m, zone=None):
+    """Cells of an n x n grid centred on the site (north at the top) that are inside the area."""
+    c = (n - 1) / 2
+    yy, xx = np.mgrid[0:n, 0:n]
+    return in_area((xx - c) * cell_m, (c - yy) * cell_m, radius_m, zone)
+
+
+def zone_tag(zone):
+    """Short name of a drawn zone, for cache file names ('' for the circle)."""
+    return "_z" + hashlib.md5(json.dumps(zone).encode()).hexdigest()[:8] if zone else ""
+
+
 def solid(share, height):
     """Height of each cell that is mostly building, 0 elsewhere."""
     return np.where(share >= 0.5, height, 0.0)
 
 
-def form(share, height, radius_m):
-    """Urban form inside the circle (same keys as urban.morphology)."""
+def form(share, height, radius_m, zone=None):
+    """Urban form inside the analysis area (same keys as urban.morphology)."""
     n = share.shape[0]
-    c = (n - 1) / 2
-    yy, xx = np.mgrid[0:n, 0:n]
-    inside = np.hypot(xx - c, yy - c) * CELL_M <= radius_m
+    inside = grid_area(n, CELL_M, radius_m, zone)
     cells = int(inside.sum())
     built_area = float(share[inside].sum())
     if built_area < 1:
-        raise ValueError("The satellite data shows no buildings inside this circle.")
+        raise ValueError("The satellite data shows no buildings inside this area.")
     h = solid(share, height)
     # wall area = height steps between neighbouring cells (shared walls drop out by themselves)
     steps = (np.abs(np.diff(h, axis=0)) * (inside[1:, :] & inside[:-1, :])).sum() \

@@ -1,0 +1,288 @@
+{
+  "model_error": {
+    "homes": 12,
+    "mean_c": 0.32,
+    "sd_c": 0.61,
+    "min_c": -1.13,
+    "max_c": 1.22,
+    "hourly_rmse_c": 1.05,
+    "band_used_c": 0.6
+  },
+  "weeks": [
+    {
+      "year": 2016,
+      "start": "2016-04-21",
+      "end": "2016-04-27",
+      "mean_outdoor_heat_index_c": 40.9,
+      "hours_from_station": 336,
+      "baseline_safe_hours": 142,
+      "baseline_low": 142,
+      "baseline_high": 147,
+      "best_change": "roof_solar_absorptance=0.2",
+      "best_gain_h": 10,
+      "rank_match_with_2024": 0.99
+    },
+    {
+      "year": 2017,
+      "start": "2017-05-14",
+      "end": "2017-05-20",
+      "mean_outdoor_heat_index_c": 41.6,
+      "hours_from_station": 336,
+      "baseline_safe_hours": 106,
+      "baseline_low": 92,
+      "baseline_high": 120,
+      "best_change": "roof_solar_absorptance=0.2",
+      "best_gain_h": 44,
+      "rank_match_with_2024": 1.0
+    },
+    {
+      "year": 2018,
+      "start": "2018-05-26",
+      "end": "2018-06-01",
+      "mean_outdoor_heat_index_c": 41.3,
+      "hours_from_station": 335,
+      "baseline_safe_hours": 131,
+      "baseline_low": 115,
+      "baseline_high": 146,
+      "best_change": "roof_solar_absorptance=0.2",
+      "best_gain_h": 27,
+      "rank_match_with_2024": 0.99
+    },
+    {
+      "year": 2019,
+      "start": "2019-05-24",
+      "end": "2019-05-30",
+      "mean_outdoor_heat_index_c": 43.2,
+      "hours_from_station": 336,
+      "baseline_safe_hours": 112,
+      "baseline_low": 90,
+      "baseline_high": 124,
+      "best_change": "roof_solar_absorptance=0.2",
+      "best_gain_h": 17,
+      "rank_match_with_2024": 0.99
+    },
+    {
+      "year": 2020,
+      "start": "2020-05-22",
+      "end": "2020-05-28",
+      "mean_outdoor_heat_index_c": 43.5,
+      "hours_from_station": 336,
+      "baseline_safe_hours": 88,
+      "baseline_low": 47,
+      "baseline_high": 113,
+      "best_change": "roof_solar_absorptance=0.2",
+      "best_gain_h": 36,
+      "rank_match_with_2024": 0.95
+    },
+    {
+      "year": 2021,
+      "start": "2021-05-13",
+      "end": "2021-05-19",
+      "mean_outdoor_heat_index_c": 38.2,
+      "hours_from_station": 336,
+      "baseline_safe_hours": 161,
+      "baseline_low": 160,
+      "baseline_high": 162,
+      "best_change": "roof_solar_absorptance=0.2",
+      "best_gain_h": 2,
+      "rank_match_with_2024": 0.95
+    },
+    {
+      "year": 2022,
+      "start": "2022-04-30",
+      "end": "2022-05-06",
+      "mean_outdoor_heat_index_c": 43.4,
+      "hours_from_station": 336,
+      "baseline_safe_hours": 57,
+      "baseline_low": 33,
+      "baseline_high": 77,
+      "best_change": "roof_solar_absorptance=0.2",
+      "best_gain_h": 41,
+      "rank_match_with_2024": 1.0
+    },
+    {
+      "year": 2023,
+      "start": "2023-05-14",
+      "end": "2023-05-20",
+      "mean_outdoor_heat_index_c": 43.9,
+      "hours_from_station": 336,
+      "baseline_safe_hours": 55,
+      "baseline_low": 43,
+      "baseline_high": 77,
+      "best_change": "roof_solar_absorptance=0.2",
+      "best_gain_h": 43,
+      "rank_match_with_2024": 1.0
+    },
+    {
+      "year": 2024,
+      "start": "2024-05-01",
+      "end": "2024-05-07",
+      "mean_outdoor_heat_index_c": 45.1,
+      "hours_from_station": 336,
+      "baseline_safe_hours": 59,
+      "baseline_low": 28,
+      "baseline_high": 83,
+      "best_change": "roof_solar_absorptance=0.2",
+      "best_gain_h": 39,
+      "rank_match_with_2024": 1.0
+    },
+    {
+      "year": 2025,
+      "start": "2025-05-10",
+      "end": "2025-05-16",
+      "mean_outdoor_heat_index_c": 42.0,
+      "hours_from_station": 336,
+      "baseline_safe_hours": 94,
+      "baseline_low": 73,
+      "baseline_high": 121,
+      "best_change": "roof_solar_absorptance=0.2",
+      "best_gain_h": 50,
+      "rank_match_with_2024": 1.0
+    }
+  ],
+  "error_band_2024": [
+    {
+      "design": "baseline",
+      "safe_hours": 59,
+      "gain": 0,
+      "gain_if_warmer": 0,
+      "gain_if_cooler": 0
+    },
+    {
+      "design": "roof_solar_absorptance=0.2",
+      "safe_hours": 98,
+      "gain": 39,
+      "gain_if_warmer": 44,
+      "gain_if_cooler": 31
+    },
+    {
+      "design": "roof=rcc_150_insul_50",
+      "safe_hours": 86,
+      "gain": 27,
+      "gain_if_warmer": 33,
+      "gain_if_cooler": 29
+    },
+    {
+      "design": "roof_solar_absorptance=0.4",
+      "safe_hours": 78,
+      "gain": 19,
+      "gain_if_warmer": 28,
+      "gain_if_cooler": 23
+    },
+    {
+      "design": "wall=aac_200",
+      "safe_hours": 64,
+      "gain": 5,
+      "gain_if_warmer": 8,
+      "gain_if_cooler": 12
+    },
+    {
+      "design": "shading_depth_m=0.6",
+      "safe_hours": 60,
+      "gain": 1,
+      "gain_if_warmer": 1,
+      "gain_if_cooler": 2
+    },
+    {
+      "design": "wall=brick_115",
+      "safe_hours": 57,
+      "gain": -2,
+      "gain_if_warmer": 2,
+      "gain_if_cooler": -1
+    },
+    {
+      "design": "night_vent=False",
+      "safe_hours": 10,
+      "gain": -49,
+      "gain_if_warmer": -27,
+      "gain_if_cooler": -57
+    }
+  ],
+  "gains_by_year": {
+    "roof_solar_absorptance=0.2": {
+      "2016": 10,
+      "2017": 44,
+      "2018": 27,
+      "2019": 17,
+      "2020": 36,
+      "2021": 2,
+      "2022": 41,
+      "2023": 43,
+      "2024": 39,
+      "2025": 50
+    },
+    "roof=rcc_150_insul_50": {
+      "2016": 9,
+      "2017": 30,
+      "2018": 24,
+      "2019": 11,
+      "2020": 18,
+      "2021": 1,
+      "2022": 32,
+      "2023": 33,
+      "2024": 27,
+      "2025": 37
+    },
+    "roof_solar_absorptance=0.4": {
+      "2016": 6,
+      "2017": 24,
+      "2018": 18,
+      "2019": 9,
+      "2020": 20,
+      "2021": 1,
+      "2022": 23,
+      "2023": 23,
+      "2024": 19,
+      "2025": 29
+    },
+    "wall=aac_200": {
+      "2016": 1,
+      "2017": 4,
+      "2018": 4,
+      "2019": 2,
+      "2020": 4,
+      "2021": 0,
+      "2022": 4,
+      "2023": 8,
+      "2024": 5,
+      "2025": 10
+    },
+    "shading_depth_m=0.6": {
+      "2016": 0,
+      "2017": 3,
+      "2018": 4,
+      "2019": 2,
+      "2020": 1,
+      "2021": 0,
+      "2022": 2,
+      "2023": 3,
+      "2024": 1,
+      "2025": 3
+    },
+    "wall=brick_115": {
+      "2016": 0,
+      "2017": -6,
+      "2018": -8,
+      "2019": -4,
+      "2020": 1,
+      "2021": 0,
+      "2022": 1,
+      "2023": -1,
+      "2024": -2,
+      "2025": -5
+    },
+    "night_vent=False": {
+      "2016": -57,
+      "2017": -52,
+      "2018": -57,
+      "2019": -64,
+      "2020": -57,
+      "2021": -56,
+      "2022": -46,
+      "2023": -38,
+      "2024": -49,
+      "2025": -50
+    }
+  },
+  "note": "Baseline flat, top floor, windows open day and night, cut 20-21 h. Gains are safe hours against the baseline of the same week. rank_match = Spearman correlation of the gains with the 2024 week."
+}

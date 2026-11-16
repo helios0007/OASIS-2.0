@@ -22,7 +22,7 @@ from oasis.agents import (CORE_CAUTION_C, CORE_CRITICAL_C, CORE_LIMIT_C, DEFAULT
 from oasis.build_layout import (DOOR_HEIGHT_M, OPENING_KINDS, OPPOSITE, build_layout_idf, load_layout,
                                 split_party, wall_segments, windowless_party, zone_id)
 from oasis.assess import greedy_packages, result_row
-from oasis.metrics import SAFE_LIMIT_C, fan_credit_c, heat_dose, heat_index_c, heat_index_ext_c
+from oasis.metrics import SAFE_LIMIT_C, fan_credit_c, heat_dose, heat_index_c, heat_index_ext_c, safe_range
 from oasis.params import BASELINE
 from oasis.simulate import run
 
@@ -211,7 +211,8 @@ def occupied_hourly(rooms_h, lay, cut):
 
 def summary_of(h):
     hi, t = h["heat_index"], h["t_in"]
-    return {"hours_total": len(h), "safe_hours": int((~h["danger"]).sum()), "danger_hours": int(h["danger"].sum()),
+    return {"hours_total": len(h), "safe_hours": int((~h["danger"]).sum()),
+            **safe_range(h["t_in"], h["t_mrt"], h["rh_in"], h["cut"]), "danger_hours": int(h["danger"].sum()),
             "cut_hours_in_danger": int((h["danger"] & h["cut"]).sum()),
             "degree_hours_over_limit": round(float((hi - SAFE_LIMIT_C).clip(lower=0).sum()), 1),
             "max_heat_index_c": round(float(hi.max()), 1), "max_indoor_temp_c": round(float(t.max()), 1),

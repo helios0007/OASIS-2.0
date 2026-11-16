@@ -21,11 +21,11 @@ import re
 import tempfile
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 import config
 from oasis.agents import (
@@ -37,6 +37,7 @@ from oasis.assess import assess, assess_packages, single_changes
 from oasis import costs
 from oasis import outages
 from oasis import urban
+from oasis import exposure
 from oasis import urban_env
 from oasis import urban_heights
 from oasis.box_view import box_unit
@@ -47,7 +48,7 @@ from oasis.build_idf import (
 from oasis.from_rhino import read_model
 from oasis.labels import LABELS
 from oasis.metrics import (BANDS, CAUTION_C, DOSE_LIMIT_ELDERLY_CH, DOSE_LIMIT_YOUNG_CH, FAN_AIR_SPEED_MS,
-                           FAN_CREDIT_C, HI_MAX_LIMIT_C, SAFE_LIMIT_C, cut_hours_list, peaks)
+                           FAN_CREDIT_C, HI_MAX_LIMIT_C, SAFE_LIMIT_C, TEMP_ERROR_C, cut_hours_list, peaks)
 from oasis.params import BASELINE, SWEEP_LEVELS
 from oasis import surrogate
 from oasis.unit import assess_plan, plan_geometry
@@ -168,6 +169,7 @@ def options():
             "cut_start_hour": config.CUT_START_HOUR,
             "cut_end_hour": config.CUT_END_HOUR,
             "safe_limit_c": SAFE_LIMIT_C,
+            "temp_error_c": TEMP_ERROR_C,   # model error band on every score (metrics.TEMP_ERROR_C)
             "cut_lengths": scenario.CUT_LENGTHS,
             # measured outage profile (get_outages.py); None until the ESMI files are supplied
             "measured_outages": outages.measured(),
@@ -272,12 +274,23 @@ async def rhino(file: UploadFile = File(...)):
 
 
 class Place(BaseModel):
-    """A circle on the map (urban tab)."""
+    """The analysis area on the map (urban tab): a circle, or a zone drawn inside it."""
     name: str = Field("Site", max_length=80)
     lat: float = Field(..., ge=12.6, le=13.5)          # Chennai and its suburbs
     lon: float = Field(..., ge=79.9, le=80.4)
     radius_m: float = Field(250, ge=100, le=500)
     default_storeys: float = Field(3, ge=1, le=30)     # for buildings with no height on the map
+    # corners of a drawn zone, metres east / north of (lat, lon); None = the circle. radius_m must reach every corner
+    zone: Optional[List[List[float]]] = None
+
+    @field_validator("zone")
+    @classmethod
+    def check_zone(cls, zone):
+        if zone is None:
+            return None
+        if not 3 <= len(zone) <= 60 or any(len(pt) != 2 or max(abs(pt[0]), abs(pt[1])) > 500 for pt in zone):
+            raise ValueError("A zone needs 3 to 60 corners within 500 m of its centre.")
+        return [[round(float(x), 1), round(float(y), 1)] for x, y in zone]
 
 
 class UrbanRun(Place):
@@ -295,12 +308,15 @@ class UrbanRun(Place):
     focus_x_m: Optional[float] = Field(None, ge=-560, le=560)
     focus_y_m: Optional[float] = Field(None, ge=-560, le=560)
     building_height_m: Optional[float] = Field(None, ge=2, le=200)
+    homes: str = Field(urban.DEFAULT_HOMES, pattern="^(no_ac|us_ac)$")      # the homes around the site (urban.CITY_HOMES)
+    street_heat_w_m2: float = Field(urban.SENS_ANTH_W_M2, ge=0, le=150)   # traffic and other street heat
 
 
 @app.get("/api/urban")
 def urban_state():
     """Preset places and the neighbourhood currently handed to the home model."""
-    return {"places": urban.PLACES, "site": urban.site(), "floor_m": urban.FLOOR_M, "carto_key": urban.carto_key(),
+    return {"places": urban.PLACES, "site": urban.site(), "floor_m": urban.FLOOR_M,
+            "homes": urban.CITY_HOMES, "default_homes": urban.DEFAULT_HOMES, "street_heat_w_m2": urban.SENS_ANTH_W_M2, "carto_key": urban.carto_key(),
             "overture_release": urban.overture_release()}
 
 
@@ -318,7 +334,7 @@ def urban_map(place: Place):
         notes.append(f"Street map not available ({str(error).splitlines()[0]}).")
     try:
         share, height = urban_heights.height_grid(place.lat, place.lon, place.radius_m)
-        form = urban_heights.form(share, height, place.radius_m)
+        form = urban_heights.form(share, height, place.radius_m, place.zone)
         around = urban_heights.obstructions(share, height)
         grid = {"cell_m": urban_heights.CELL_M, "half_m": place.radius_m + urban_heights.MARGIN_M,
                 "heights": [[int(round(v)) for v in row] for row in urban_heights.solid(share, height)]}
@@ -330,7 +346,7 @@ def urban_map(place: Place):
         form = osm_form
     if form is None:
         raise HTTPException(502, " ".join(notes))
-    env, env_notes = urban_env.read_all(place.lat, place.lon, place.radius_m)    # sky view, sun, land cover, surface temperature
+    env, env_notes = urban_env.read_all(place.lat, place.lon, place.radius_m, place.zone)    # sky view, sun, land cover, surface temperature
     if grid is None:
         env["sky"] = None                                                         # needs the satellite heights
         env_notes = [n for n in env_notes if not n.startswith("Sky view")]
@@ -340,6 +356,28 @@ def urban_map(place: Place):
             "buildings": [{"xy": [[round(x, 1), round(y, 1)] for x, y in b["xy"]], "height_m": b.get("height_m"),
                            "tagged": b["height_tag"] is not None, "inside": b.get("inside", False),
                            "sat_height_m": roof_m[i] if roof_m else None} for i, b in enumerate(buildings)]}
+
+
+class ExposureBuilding(BaseModel):
+    id: str = Field(..., max_length=80)
+    x_m: float = Field(..., ge=-600, le=600)
+    y_m: float = Field(..., ge=-600, le=600)
+    height_m: float = Field(..., ge=0, le=300)
+    height_assumed: bool = False      # no building in the satellite layer here: the drawn height is a guess
+
+
+class ExposureRequest(Place):
+    """The buildings drawn in the analysis area, to be scored (oasis/exposure.py)."""
+    buildings: List[ExposureBuilding] = Field(..., max_length=4000)
+
+
+@app.post("/api/urban/exposure")
+def urban_exposure(req: ExposureRequest):
+    """Heat exposure index 0-10 for each building: the physical part of OASIS 1.0's index."""
+    try:
+        return exposure.score_buildings(req.lat, req.lon, req.radius_m, req.zone, [b.model_dump() for b in req.buildings])
+    except Exception as error:
+        raise HTTPException(502, f"The exposure index could not be worked out: {str(error).splitlines()[0]}")
 
 
 @app.post("/api/urban/run")
@@ -361,7 +399,8 @@ def urban_run(run: UrbanRun):
     with SIMULATION_LOCK:
         try:
             site = urban.make_site(run.name, run.lat, run.lon, run.radius_m, form,
-                                   run.tree_cover, run.grass_cover, run.default_storeys, around, run.green_source, building)
+                                   run.tree_cover, run.grass_cover, run.default_storeys, around, run.green_source, building,
+                                   run.homes, run.street_heat_w_m2)
         except Exception as error:
             raise HTTPException(500, f"The urban model failed: {str(error).splitlines()[0]}")
     return {"site": site, "weather": {"key": "site", **urban.site_weather(), "available": True}}

@@ -11,10 +11,13 @@ What is measured and what is assumed (also returned to the tool):
   - heights: OSM `height` / `building:levels` where tagged, otherwise the storeys
     the user types in. In Chennai few buildings are tagged, so height is mostly assumed;
   - facade ratio counts every outside edge, so walls shared by row houses are overcounted;
-  - UWG's buildings are US reference mid-rise flats (DOE, post-1980, zone 1A), with air
-    conditioning; traffic heat SENS_ANTH_W_M2; tree and grass cover are typed in;
+  - the homes around the site are chosen in the tool (CITY_HOMES): flats with no air
+    conditioning and OASIS's baseline brick wall and concrete roof (the default), or UWG's
+    US reference mid-rise flats (DOE, post-1980, zone 1A) with air conditioning;
+  - street heat is typed in (SENS_ANTH_W_M2 is UWG's default); tree and grass cover too;
   - UWG knows nothing of the sea breeze, and leaves wind speed as at the airport;
-  - not checked against any Chennai street measurement.
+  - checked only against the Nungambakkam station (check_urban_station.py), which stands
+    in an open compound, not in a street.
 """
 import hashlib
 import json
@@ -38,16 +41,30 @@ FLOOR_M = 3.0             # m per storey, to turn storeys into height (assumed)
 SENS_ANTH_W_M2 = 20       # W/m2 traffic and other street heat: the UWG default (assumed)
 UWG_ZONE = "1A"           # ASHRAE very hot, humid
 UWG_BUILDINGS = (("midriseapartment", "pst80", 1.0),)
+# The homes the urban model puts around the site. Both start from UWG's mid-rise flat.
+CITY_HOMES = {
+    "no_ac": "Flats with no air conditioning",       # cooling off, OASIS baseline wall and roof
+    "us_ac": "Air-conditioned flats (US reference)",  # UWG as it comes: cooled to 24 °C, waste heat to the street
+}
+DEFAULT_HOMES = "no_ac"   # the study sites are tenements (assumed: no room air conditioners)
+NO_COOLING_C = 60.0       # °C cooling set-point for "no_ac": the cooling never runs
+HOME_WALL, HOME_ROOF = "brick_230", "rcc_150"       # OASIS baseline (build_idf.WALLS / ROOFS)
+HOME_ALBEDO = 0.3         # wall and roof: 1 - the baseline solar absorptance of 0.7
+CHECK = config.OUT / "urban_check" / "summary.json"   # written by check_urban_station.py
 DRY_BULB, DEW_POINT, RH, IR_SKY, TOTAL_COVER, OPAQUE_COVER = 6, 7, 8, 12, 22, 23   # EPW columns
 SIGMA = 5.6697e-8         # W/m2K4
 
-# Starting points on the map. Coordinates are approximate: check them against the site.
+# Starting points on the map. Coordinates point directly to the tenement blocks / stations.
 PLACES = [
-    {"name": "Nungambakkam (weather station area)", "lat": 13.0678, "lon": 80.2472},
-    {"name": "T. Nagar", "lat": 13.0418, "lon": 80.2341},
-    {"name": "George Town", "lat": 13.0945, "lon": 80.2866},
-    {"name": "Kannagi Nagar tenements", "lat": 12.9365, "lon": 80.2370},
-    {"name": "Perumbakkam tenements", "lat": 12.9050, "lon": 80.1960},
+    {"name": "Kannagi Nagar TNUHDB tenements", "lat": 12.9312, "lon": 80.2328},
+    {"name": "Perumbakkam TNUHDB tenements", "lat": 12.8972, "lon": 80.2035},
+    {"name": "Perumbakkam Light House Project (PMAY)", "lat": 12.8938, "lon": 80.2012},
+    {"name": "KP Park (Pulianthope TNUHDB)", "lat": 13.0992, "lon": 80.2647},
+    {"name": "Nungambakkam (IMD weather station)", "lat": 13.0678, "lon": 80.2472},
+    {"name": "T. Nagar (commercial & flats)", "lat": 13.0418, "lon": 80.2341},
+    {"name": "Mylapore (Kapaleeshwarar area)", "lat": 13.0339, "lon": 80.2699},
+    {"name": "George Town (historic dense core)", "lat": 13.0945, "lon": 80.2866},
+    {"name": "Ennore / Ernavoor tenements", "lat": 13.2045, "lon": 80.3168},
 ]
 
 
@@ -201,7 +218,37 @@ def run_window():
     return first, days * 24
 
 
-def urban_air(form, tree_cover, grass_cover, epw_out):
+def chennai_element(layers, horizontal, name):
+    """A wall or roof for UWG from OASIS's own materials (layers outside to inside),
+    cut into the thin slices UWG's conduction needs."""
+    from uwg import UWG
+    from uwg.element import Element
+    from uwg.material import Material
+    from oasis.build_idf import MATERIALS
+
+    thick = [MATERIALS[k][0] for k in layers]
+    mats = [Material(MATERIALS[k][1], MATERIALS[k][2] * MATERIALS[k][3], k) for k in layers]   # W/m.K, J/m3.K
+    whole = Element(HOME_ALBEDO, 0.9, thick, mats, 0.0, 303.0, horizontal, name)
+    mats, thick = UWG._procmat(whole, UWG.MAXTHICKNESS, UWG.MINTHICKNESS)
+    return Element(HOME_ALBEDO, 0.9, thick, mats, 0.0, 303.0, horizontal, name)
+
+
+def free_running(model):
+    """Turn UWG's reference flats into homes without air conditioning: the cooling never
+    runs (so no waste heat goes to the street) and the wall and roof are OASIS's baseline.
+    Glazing, people, appliances and air leakage stay as in UWG's flat. Call after generate()."""
+    from oasis.build_idf import ROOFS, WALLS
+
+    for sch in model.Sch:      # UWG re-reads the set-point from this schedule every hour
+        sch.cool = [[NO_COOLING_C] * 24 for _ in range(3)]
+    for bem in model.BEM:
+        bem.building.cool_setpoint_day = bem.building.cool_setpoint_night = NO_COOLING_C + 273.15
+        bem.wall = chennai_element(WALLS[HOME_WALL], False, "oasis_wall")
+        bem.roof = chennai_element(ROOFS[HOME_ROOF], True, "oasis_roof")
+    model.alb_wall_total = HOME_ALBEDO
+
+
+def urban_air(form, tree_cover, grass_cover, epw_out, homes=DEFAULT_HOMES, street_heat=SENS_ANTH_W_M2):
     """Run UWG on the airport heatwave file for the spin-up + scored days and write
     epw_out: the airport file with street-canyon temperature and humidity in those days.
     Returns the mean urban minus airport air temperature for each hour of the day, 1-7 May."""
@@ -215,9 +262,11 @@ def urban_air(form, tree_cover, grass_cover, epw_out):
         model = UWG.from_param_args(
             bldheight=form["mean_height_m"], blddensity=form["site_coverage"], vertohor=form["facade_to_site"],
             grasscover=grass_cover, treecover=tree_cover, zone=UWG_ZONE, bld=UWG_BUILDINGS,
-            sensanth=SENS_ANTH_W_M2, month=config.SPINUP_START[0], day=config.SPINUP_START[1], nday=rows // 24,
+            sensanth=street_heat, month=config.SPINUP_START[0], day=config.SPINUP_START[1], nday=rows // 24,
             epw_path=str(filled), new_epw_dir=str(work), new_epw_name="urban.epw")
         model.generate()
+        if homes == "no_ac":
+            free_running(model)
         model.simulate()
         model.write_epw()
         urban = (work / "urban.epw").read_text().splitlines()
@@ -239,14 +288,15 @@ def urban_air(form, tree_cover, grass_cover, epw_out):
 
 
 def make_site(name, lat, lon, radius_m, form, tree_cover, grass_cover, default_storeys, surroundings=None, green_source="typed",
-              building=None):
+              building=None, homes=DEFAULT_HOMES, street_heat=SENS_ANTH_W_M2):
     """Urban air for one place, saved as the current site (the "site" weather case).
     surroundings: urban_heights.obstructions(...) for neighbour shading, or None."""
     inputs = {"name": name, "lat": lat, "lon": lon, "radius_m": radius_m, "form": form,
-              "tree_cover": tree_cover, "grass_cover": grass_cover, "default_storeys": default_storeys}
+              "tree_cover": tree_cover, "grass_cover": grass_cover, "default_storeys": default_storeys,
+              "homes": homes, "street_heat_w_m2": street_heat}
     tag = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()[:8]
     epw = config.OUT / "weather_cases" / f"chennai_heatwave_site_{tag}.epw"
-    delta = urban_air(form, tree_cover, grass_cover, epw)
+    delta = urban_air(form, tree_cover, grass_cover, epw, homes, street_heat)
     night = [delta[h] for h in (20, 21, 22, 23, 0, 1, 2, 3, 4, 5)]
     day = [delta[h] for h in range(10, 17)]
     site = {**inputs, "epw": epw.name,
@@ -258,7 +308,7 @@ def make_site(name, lat, lon, radius_m, form, tree_cover, grass_cover, default_s
             "roughness": urban_heights.roughness(form),
             "green_source": green_source,
             "building": building,          # the building picked on the map: {"x_m", "y_m", "height_m", "storeys"}, or None
-            "assumptions": assumptions(form, default_storeys, tree_cover, grass_cover, green_source)}
+            "assumptions": assumptions(form, default_storeys, tree_cover, grass_cover, green_source, homes, street_heat)}
     SITE.write_text(json.dumps(site, indent=2))
     for old in epw.parent.glob("chennai_heatwave_site_*.epw"):     # keep only the current site's file
         if old != epw:
@@ -266,7 +316,20 @@ def make_site(name, lat, lon, radius_m, form, tree_cover, grass_cover, default_s
     return site
 
 
-def assumptions(form, default_storeys, tree_cover, grass_cover, green_source="typed"):
+def station_check(homes=DEFAULT_HOMES):
+    """The line on how the model did at the Nungambakkam station, from check_urban_station.py."""
+    if not CHECK.exists():
+        return {"status": "Assumed", "text": "Not checked against a Chennai measurement (run check_urban_station.py)."}
+    c = json.loads(CHECK.read_text())
+    m, s = c["cases"][homes], c["station"]
+    return {"status": "Checked", "text": f"Checked at the Nungambakkam weather station, 1–7 May 2024: with these homes the model gives "
+            f"{m['night_c']:+.1f} °C at night and {m['day_c']:+.1f} °C by day against the airport; the station measured "
+            f"{s['night_c']:+.1f} and {s['day_c']:+.1f} °C. The station stands in an open compound, not a street, "
+            "and no Chennai street has been measured."}
+
+
+def assumptions(form, default_storeys, tree_cover, grass_cover, green_source="typed", homes=DEFAULT_HOMES,
+                street_heat=SENS_ANTH_W_M2):
     """What the urban result rests on, each tagged Mapped / Typed in / Assumed."""
     untagged = 1 - form.get("height_tagged_share", 0)
     if form.get("source") == "satellite":
@@ -285,9 +348,14 @@ def assumptions(form, default_storeys, tree_cover, grass_cover, green_source="ty
              {"status": "Typed in", "text": f"Tree cover {tree_cover:.0%}, grass cover {grass_cover:.0%}."})
     return shape + [
         green,
-        {"status": "Assumed", "text": f"The city's buildings are UWG's US reference mid-rise flats (post-1980, air-conditioned); street heat {SENS_ANTH_W_M2} W/m²."},
+        ({"status": "Chosen", "text": "The homes around have no air conditioning, with 230 mm plastered brick walls and a 150 mm concrete roof (OASIS's baseline). "
+                                      "Their windows, people, appliances and air leakage are still those of UWG's US reference mid-rise flat."}
+         if homes == "no_ac" else
+         {"status": "Chosen", "text": "The homes around are UWG's US reference mid-rise flats (post-1980), air-conditioned to 24 °C, with the waste heat going to the street."}),
+        {"status": "Assumed" if street_heat == SENS_ANTH_W_M2 else "Typed in",
+         "text": f"Street heat from traffic: {street_heat:g} W/m²" + (" (UWG's default, not a Chennai figure)." if street_heat == SENS_ANTH_W_M2 else ".")},
         {"status": "Assumed", "text": "No sea breeze. Wind speed stays as at the airport: the home model's airflow was already fitted to homes in dense streets, so the roof-level wind shown here is for information only."},
-        {"status": "Assumed", "text": "Not checked against a Chennai street measurement."},
+        station_check(homes),
     ]
 
 

@@ -116,7 +116,7 @@ def canopy_metres(lat, lon, half_m):
     return out
 
 
-def canopy(lat, lon, radius_m):
+def canopy(lat, lon, radius_m, zone=None):
     """Trees on the 4 m grid of urban_heights: share of each cell under canopy and the canopy
     height there, and the tree cover inside the circle (also for 2 m and 5 m cut-offs)."""
     def make():
@@ -129,9 +129,7 @@ def canopy(lat, lon, radius_m):
         count = tree.sum(axis=(1, 3))
         share = count / (k * k)
         height = np.where(count > 0, (blocks * tree).sum(axis=(1, 3)) / np.maximum(count, 1), 0.0)
-        c = (h.shape[0] - 1) / 2
-        yy, xx = np.mgrid[0:h.shape[0], 0:h.shape[0]]
-        inside = np.hypot(xx - c, yy - c) <= radius_m
+        inside = urban_heights.grid_area(h.shape[0], 1.0, radius_m, zone)      # the canopy map has 1 m pixels
         cover = lambda cut: round(float((h[inside] >= cut).mean()), 3)
         return {"cell_m": CELL_M, "half_m": half,
                 "share_pct": np.round(share * 100).astype(int).tolist(),
@@ -139,7 +137,7 @@ def canopy(lat, lon, radius_m):
                 "tree_cover": cover(TREE_MIN_M), "tree_cover_2m": cover(2.0), "tree_cover_5m": cover(5.0),
                 "mean_tree_height_m": round(float(h[inside & (h >= TREE_MIN_M)].mean()), 1) if (h[inside] >= TREE_MIN_M).any() else 0.0,
                 "tree_min_m": TREE_MIN_M, "height_error_m": CANOPY_MAE_M}
-    return cached(f"canopy_{lat:.5f}_{lon:.5f}_{int(radius_m)}", make)
+    return cached(f"canopy_{lat:.5f}_{lon:.5f}_{int(radius_m)}{urban_heights.zone_tag(zone)}", make)
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +191,7 @@ def sky_grids(h, lat, own_cover=None):
     return svf, sun, len(positions) * SUN_STEP_H
 
 
-def sky_and_sun(lat, lon, radius_m):
+def sky_and_sun(lat, lon, radius_m, zone=None):
     """Open ground only (building cells are -1): sky view factor in % and hours of direct
     sun on 4 May, on the 4 m grid of urban_heights. Buildings and trees both block the sky
     (tree crowns taken as solid); the means with buildings alone are given beside them.
@@ -202,12 +200,12 @@ def sky_and_sun(lat, lon, radius_m):
         share, height = urban_heights.height_grid(lat, lon, radius_m)
         h = urban_heights.solid(share, height)
         ground = h == 0
-        open_in = ground & inside_circle(h.shape[0], CELL_M, radius_m)
+        open_in = ground & urban_heights.grid_area(h.shape[0], CELL_M, radius_m, zone)
         if not open_in.any():
-            raise ValueError("No open ground inside this circle.")
+            raise ValueError("No open ground inside this area.")
         svf0, sun0, day = sky_grids(h, lat)                       # buildings alone
         try:
-            trees = canopy(lat, lon, radius_m)
+            trees = canopy(lat, lon, radius_m, zone)
             cover = np.array(trees["share_pct"], np.float32) / 100 * ground
             tall = np.where(cover >= 0.5, np.array(trees["height_m"], np.float32), 0.0)     # cells that are mostly crown
             svf, sun, day = sky_grids(np.maximum(h, tall), lat, cover)
@@ -225,7 +223,7 @@ def sky_and_sun(lat, lon, radius_m):
             "shaded_share": round(float((sun[open_in] < 0.5 * day).mean()), 2),   # open ground in sun for less than half the day
             "look_m": LOOK_M,
         }
-    return cached(f"sky2_{lat:.5f}_{lon:.5f}_{int(radius_m)}", make)
+    return cached(f"sky2_{lat:.5f}_{lon:.5f}_{int(radius_m)}{urban_heights.zone_tag(zone)}", make)
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +235,7 @@ def worldcover_tile(lat, lon):
     return f"{'N' if la >= 0 else 'S'}{abs(la):02d}{'E' if lo >= 0 else 'W'}{abs(lo):03d}"
 
 
-def land_cover(lat, lon, radius_m):
+def land_cover(lat, lon, radius_m, zone=None):
     """WorldCover classes on their own 10 m grid (degrees), with its bounds, and the share
     of each group inside the circle."""
     def make():
@@ -255,12 +253,12 @@ def land_cover(lat, lon, radius_m):
         lons = west + (np.arange(cols) + 0.5) * (east - west) / cols
         dy = (lats[:, None] - lat) * 110540
         dx = (lons[None, :] - lon) * 111320 * math.cos(math.radians(lat))
-        inside = np.hypot(dx, dy) <= radius_m
+        inside = urban_heights.in_area(dx, dy, radius_m, zone)
         groups = np.vectorize(lambda c: COVER_GROUPS.get(int(c), "other"))(classes)
         shares = {g: round(float((groups[inside] == g).mean()), 3) for g in ("tree", "grass", "water", "built", "bare")}
         return {"bounds": [west, south, east, north], "classes": classes.astype(int).tolist(),
                 "shares": shares, "year": WORLDCOVER_YEAR, "pixel_m": 10}
-    return cached(f"cover_{lat:.5f}_{lon:.5f}_{int(radius_m)}", make)
+    return cached(f"cover_{lat:.5f}_{lon:.5f}_{int(radius_m)}{urban_heights.zone_tag(zone)}", make)
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +283,7 @@ def signed(href):
     return reply.json()["href"]
 
 
-def surface_temp(lat, lon, radius_m):
+def surface_temp(lat, lon, radius_m, zone=None):
     """Surface temperature (deg C, None under cloud) on Landsat's 30 m grid, the four corners
     of that grid in degrees (NW, NE, SE, SW), and the mean, lowest and highest inside the circle."""
     def make():
@@ -310,7 +308,7 @@ def surface_temp(lat, lon, radius_m):
         rows, cols = temp.shape
         ys = top - (np.arange(rows) + 0.5) * pixel
         xs = left + (np.arange(cols) + 0.5) * pixel
-        inside = (np.hypot(xs[None, :] - cx[0], ys[:, None] - cy[0]) <= radius_m) & clear
+        inside = urban_heights.in_area(xs[None, :] - cx[0], ys[:, None] - cy[0], radius_m, zone) & clear
         if not inside.any():
             raise ValueError("The clearest Landsat pass has cloud over this place.")
         lons, lats = transform(crs, "EPSG:4326", [left, right, right, left], [top, top, bottom, bottom])
@@ -326,10 +324,10 @@ def surface_temp(lat, lon, radius_m):
             "local_time": f"{int((utc_h + IST_H) % 24):02d}:{int(round(((utc_h + IST_H) % 1) * 60)) % 60:02d}",
             "scene_cloud_pct": round(scene["properties"]["eo:cloud_cover"], 1), "pixel_m": pixel,
         }
-    return cached(f"lst_{lat:.5f}_{lon:.5f}_{int(radius_m)}", make)
+    return cached(f"lst_{lat:.5f}_{lon:.5f}_{int(radius_m)}{urban_heights.zone_tag(zone)}", make)
 
 
-def read_all(lat, lon, radius_m):
+def read_all(lat, lon, radius_m, zone=None):
     """All three layers; one that fails is left out and its reason noted."""
     out, notes = {}, []
     for key, label, reader in (("canopy", "Tree canopy", canopy),
@@ -337,7 +335,7 @@ def read_all(lat, lon, radius_m):
                                ("cover", "Land cover", land_cover),
                                ("surface", "Surface temperature", surface_temp)):
         try:
-            out[key] = reader(lat, lon, radius_m)
+            out[key] = reader(lat, lon, radius_m, zone)
         except Exception as error:
             out[key] = None
             notes.append(f"{label} not available ({str(error).splitlines()[0]}).")

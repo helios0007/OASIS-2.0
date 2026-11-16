@@ -15,6 +15,15 @@ FAN_MET = 1.1            # seated, light activity (ASHRAE 55)
 FAN_CLO = 0.5            # light summer clothing (ASHRAE 55)
 FAN_CREDIT_C = 2.0       # display only: the cooling effect at 32 C / 70 % RH
 
+# Model error band. The calibrated model's mean error differs from home to home: over
+# the 12 Dhaka calibration homes (adopted settings, check period) it is +0.32 C on
+# average with a standard deviation of 0.61 C (check_uncertainty.py). That part of the
+# error does not average out over a week, so every run is also scored with the room
+# this much warmer and cooler: safe_hours_low / safe_hours_high. The hour-to-hour
+# error (RMSE 1.05 C) is not in the band, and neither is the mean +0.32 C (the model
+# is left on its warm, cautious side).
+TEMP_ERROR_C = 0.6
+
 # Heat dose (Chen et al. 2024, Building and Environment 266:112089): heat-index
 # hazard hours = the sum over the hours of (heat index - 27 C) where it is above
 # the NWS "Caution" level. Heat illness is likely above these totals (their
@@ -89,6 +98,29 @@ def heat_dose(hi):
     }
 
 
+def saturation_pa(t_c):
+    """Saturation vapour pressure of water (Pa), Magnus formula."""
+    t = np.asarray(t_c, dtype=float)
+    return 610.94 * np.exp(17.625 * t / (t + 243.04))
+
+
+def safe_count(t, mrt, rh, cut, shift_c=0.0):
+    """Safe hours with the room `shift_c` warmer (air and surfaces) and the same
+    amount of water in the air, so relative humidity falls as the room warms.
+    cut: True in the hours with no fan."""
+    t, mrt, rh, cut = (np.asarray(x) for x in (t, mrt, rh, cut))
+    t2, mrt2 = t + shift_c, mrt + shift_c
+    rh2 = np.clip(rh * saturation_pa(t) / saturation_pa(t2), 0, 100)
+    felt = t2 - np.where(cut, 0.0, fan_credit_c(t2, mrt2, rh2))
+    return int((heat_index_c(felt, rh2) < SAFE_LIMIT_C).sum())
+
+
+def safe_range(t, mrt, rh, cut):
+    """Safe hours at the two ends of the model error band (see TEMP_ERROR_C)."""
+    return {"safe_hours_low": safe_count(t, mrt, rh, cut, TEMP_ERROR_C),
+            "safe_hours_high": safe_count(t, mrt, rh, cut, -TEMP_ERROR_C)}
+
+
 def cut_hours_list(start_hour, length_h=1):
     """Hours of the day with no power: `length_h` hours from `start_hour`
     (wraps past midnight; 24 = no power all week). None start = no cut."""
@@ -157,6 +189,7 @@ def safe_hours(csv_path, cut_hours=None):
     summary = {
         "hours_total": len(df),
         "safe_hours": int((~danger).sum()),
+        **safe_range(t, t_mrt, rh, cut),
         "danger_hours": int(danger.sum()),
         "cut_hours_in_danger": int((danger & cut).sum()),
         "safe_hours_measured_cuts": measured_cut_safe,

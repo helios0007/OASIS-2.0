@@ -6,12 +6,14 @@
   <title>OASIS 2.0</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="style.css?v=8.9">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+Thambi+2:wght@500;600;700&family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&family=Hind+Madurai:wght@400;600;700&family=Mukta+Malar:wght@400;600;700&family=Silkscreen&display=swap">
+  <link rel="stylesheet" href="style.css?v=9.4">
+  <link rel="stylesheet" href="px_viewer.css?v=2.4">
   <link rel="stylesheet" href="viewer3d.css?v=8.0">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
   <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/pmtiles@3.2.0/dist/pmtiles.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/openseadragon.min.js"></script>
   <script type="importmap">
   { "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -189,6 +191,7 @@
         <div class="gauge" id="gauge" aria-hidden="true"></div>
         <div class="score-body">
           <div class="score-line"><span class="score-num" id="score">–</span><span class="score-of">/ 168 h safe</span></div>
+          <p class="score-range" id="score-range" hidden></p>
           <p class="score-verdict" id="verdict">Waiting for the first run.</p>
         </div>
       </div>
@@ -277,6 +280,8 @@
               <label class="prop"><span>Storeys where the map has none</span><span class="unit"><input type="number" id="u-storeys" min="1" max="30" step="1" value="3"><i>fl.</i></span></label>
             </div>
             <p class="hint sm muted u-hint">Preset coordinates are approximate. Check them against your site.</p>
+            <button type="button" class="btn btn-outline u-wide" id="u-draw" aria-pressed="false">Draw a zone instead</button>
+            <p class="hint sm muted u-hint" id="u-draw-note"></p>
             <button type="button" class="btn btn-outline u-wide" id="u-read">Read the map</button>
           </div>
         </details>
@@ -289,7 +294,10 @@
               <label class="prop"><span>Facade area ÷ ground area</span><span class="unit"><input type="number" id="u-facade" min="0.05" max="4" step="0.01"><i>×</i></span></label>
               <label class="prop"><span>Tree cover</span><span class="unit"><input type="number" id="u-trees" min="0" max="80" step="1" value="10"><i>%</i></span></label>
               <label class="prop"><span>Grass cover</span><span class="unit"><input type="number" id="u-grass" min="0" max="80" step="1" value="5"><i>%</i></span></label>
+              <label class="prop"><span>Street heat (traffic)</span><span class="unit"><input type="number" id="u-street-heat" min="0" max="150" step="1" value="20"><i>W/m²</i></span></label>
             </div>
+            <label class="control"><span class="control-label">Homes around the site</span>
+              <select class="select" id="u-homes"></select></label>
             <p class="hint sm muted u-hint" id="u-form-note">Read the map to fill these in from satellite building heights, or type them.</p>
             <button type="button" class="btn btn-primary u-wide" id="u-run" disabled>Run urban model</button>
           </div>
@@ -302,32 +310,73 @@
     </aside>
 
     <section class="center u-center">
-      <div class="u-map" id="u-map">
+      <div class="u-map pixel" id="u-map" data-view="painted">
+        <!-- OASIS 2.0 OpenSeadragon Isometric Map Viewer + Analysis Overlay -->
+        <div id="px-wrap">
+          <div id="px-map" role="application" aria-label="OASIS 2.0 Map of Greater Chennai. Drag to move, scroll or pinch to zoom."></div>
+          <svg id="px-oasis-svg" aria-hidden="true"></svg>
+          <header class="brand">
+            <a class="logo chip" href="#whole" aria-label="OASIS 2.0, whole map"><span class="logo-en">OASIS 2.0</span><span class="logo-ta" lang="ta">சென்னை</span></a>
+          </header>
+          <div class="topright">
+            <form class="search chip" id="px-search-form" role="search" autocomplete="off">
+              <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input type="search" id="px-q" placeholder="A place, a street or lat, long" aria-label="Search the map" autocomplete="off">
+              <kbd aria-hidden="true">/</kbd>
+            </form>
+            <nav class="tools chip" aria-label="Map tools"></nav>
+            <div class="results chip" id="px-results" role="listbox" hidden></div>
+          </div>
+          <aside class="dock chip" aria-live="polite" hidden></aside>
+          <nav class="strip chip" aria-label="Places on this map" hidden></nav>
+          <div class="mini" role="img" aria-label="Where you are in Greater Chennai, north up" hidden>
+            <img alt="" width="250" height="600" draggable="false">
+            <svg aria-hidden="true"><polygon /><circle r="14" /></svg>
+            <span class="mini-n" aria-hidden="true"><svg viewBox="0 0 10 12"><path d="M5 0 10 12 5 9 0 12Z" /></svg>N</span>
+          </div>
+          <div class="credit chip">© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors, Overture Maps</div>
+          <div class="toast" role="status" aria-live="polite"></div>
+        </div>
+
+        <!-- 3D MapLibre Vector & Environmental Data Viewer -->
         <div class="u-map-canvas" id="u-map-canvas"></div>
-        <div class="u-map-tools" role="group" aria-label="Map layers">
-          <button type="button" class="u-tool" data-base="minimal" aria-pressed="true">Minimal</button>
-          <button type="button" class="u-tool" data-base="sat" aria-pressed="false">Satellite</button>
-          <button type="button" class="u-tool" id="u-ctx" aria-pressed="true">City in 3D</button>
-          <button type="button" class="u-tool" id="u-tilt" aria-pressed="true">Isometric</button>
-          <button type="button" class="u-tool" id="u-pixel" aria-pressed="false">Pixel</button>
+        <!-- View: the same toolbar as the Home viewport. Painted = the isometric picture; 3D and Top view = our own map -->
+        <div class="u-tools card-glass u-views" role="toolbar" aria-label="View">
+          <button type="button" class="tool" data-view="painted" aria-pressed="true" title="Painted isometric picture of Chennai (Pixel Chennai). It exists in this one view only.">Painted</button>
+          <button type="button" class="tool" data-view="model" aria-pressed="false" title="Our own map in 3D, from building outlines and satellite heights">3D</button>
+          <button type="button" class="tool" data-view="top" aria-pressed="false" title="Our own map seen from straight above, north up">Top view</button>
         </div>
-        <div class="u-map-layers" role="group" aria-label="What the map shows">
-          <button type="button" class="u-tool" data-layer="heights" aria-pressed="true" disabled>Building heights</button>
-          <button type="button" class="u-tool" data-layer="sky" aria-pressed="false" disabled>Sky view</button>
-          <button type="button" class="u-tool" data-layer="sun" aria-pressed="false" disabled>Sun hours</button>
-          <button type="button" class="u-tool" data-layer="cover" aria-pressed="false" disabled>Land cover</button>
-          <button type="button" class="u-tool" data-layer="surface" aria-pressed="false" disabled>Ground temperature</button>
+        <div class="u-tools card-glass u-map-tools" role="toolbar" aria-label="Map look">
+          <button type="button" class="tool u-tool" data-base="minimal" aria-pressed="true">Minimal</button>
+          <button type="button" class="tool u-tool" data-base="sat" aria-pressed="false">Satellite</button>
+          <span class="u-sep"></span>
+          <button type="button" class="tool u-tool" id="u-ctx" aria-pressed="true">City</button>
+          <button type="button" class="tool u-tool" id="u-pixel" aria-pressed="true">Pixel</button>
+          <button type="button" class="tool u-tool" id="u-lang" aria-pressed="true" title="Toggle Tamil / English labels">தமிழ்</button>
+          <span class="u-sep"></span>
+          <button type="button" class="tool u-tool" id="u-overview" title="Zoom out to the whole of Greater Chennai">Chennai</button>
         </div>
-        <p class="u-map-hint sm" id="u-map-empty">Click the map to place the site, then <b>Read the map</b>.</p>
+        <div class="u-tools card-glass u-map-layers" role="toolbar" aria-label="What the map shows">
+          <button type="button" class="tool u-tool" data-layer="exposure" aria-pressed="false" disabled title="Heat exposure index 0–10 of each building">Heat exposure</button>
+          <button type="button" class="tool u-tool" data-layer="heights" aria-pressed="true" disabled>Building heights</button>
+          <button type="button" class="tool u-tool" data-layer="sky" aria-pressed="false" disabled>Sky view</button>
+          <button type="button" class="tool u-tool" data-layer="sun" aria-pressed="false" disabled>Sun hours</button>
+          <button type="button" class="tool u-tool" data-layer="cover" aria-pressed="false" disabled>Land cover</button>
+          <button type="button" class="tool u-tool" data-layer="surface" aria-pressed="false" disabled>Ground temperature</button>
+        </div>
+        <p class="u-map-hint card-glass sm" id="u-map-empty">Click the map to place the site, then <b>Read the map</b>.</p>
       </div>
       <p class="u-map-key sm muted" id="u-map-key"></p>
     </section>
 
     <aside class="panel right" aria-label="Urban result">
-      <div class="panel-title"><span>Outdoor air at this place</span></div>
+      <div class="panel-title"><span>This place</span></div>
       <div class="u-pick" id="u-pick" hidden></div>
-      <div class="panel-scroll u-result" id="u-result">
+      <div class="panel-scroll">
+      <div class="u-result" id="u-exposure" hidden></div>
+      <div class="u-result" id="u-result">
         <p class="muted sm lead">The urban model turns the airport heatwave week into the air of this street. The result is handed to the Home tab as the outdoor air "Site".</p>
+      </div>
       </div>
     </aside>
   </div>
@@ -366,8 +415,9 @@
 <!-- Toasts -->
 <ol class="toaster" id="toaster" aria-live="polite"></ol>
 
-<script src="app.js?v=8.4"></script>
-<script src="urban.js?v=10.2"></script>
+<script src="app.js?v=8.5"></script>
+<script src="urban.js?v=15.0"></script>
+<script src="px_viewer.js?v=4.1"></script>
 <script type="module" src="viewer3d.js?v=8.0"></script>
 </body>
 </html>

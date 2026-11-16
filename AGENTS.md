@@ -32,7 +32,7 @@ It is a design-stage simulation and decision-support tool for new residential bu
 - **Interfaces (3 Front Ends)**:
   1. **Static HTML Tool** (`make_tool.py` + `tool/template.html` → `outputs/oasis_tool.html`): standalone lookup tool backed by the 1,512 pre-simulated sweep results for each outdoor-air case (airport / city centre / street AC, `oasis/scenario.py`).
   2. **Streamlit Local App** (`app.py`): interactive local UI supporting `.3dm` uploads and live EnergyPlus simulations, with the same outdoor-air and power-cut-hour scenario choices as the web tool.
-  3. **FastAPI + Vanilla JS Web Tool** (`run_server.py`, `backend/main.py`, `frontend/`): REST API (`/api/health`, `/api/options`, `/api/rhino`, `/api/assess`, `/api/predict`, `/api/urban`) and single-page web interface with live simulation, caching, and step-by-step intervention application. Two modes: **Home**, and **Neighbourhood** (`oasis/urban.py`, `frontend/urban.js`, `oasis/urban_heights.py`: Google Open Buildings 2.5D heights + OpenStreetMap footprints → urban form → Urban Weather Generator → outdoor air "Site" and neighbour shading for the Home tab).
+  3. **FastAPI + Vanilla JS Web Tool** (`run_server.py`, `backend/main.py`, `frontend/`): REST API (`/api/health`, `/api/options`, `/api/rhino`, `/api/assess`, `/api/predict`, `/api/urban`, `/api/urban/exposure`) and single-page web interface with live simulation, caching, and step-by-step intervention application. Two modes: **Home**, and **Neighbourhood** (`oasis/urban.py`, `frontend/urban.js`, `oasis/exposure.py`: heat exposure index 0–10 per building; `oasis/urban_heights.py`: Google Open Buildings 2.5D heights + OpenStreetMap footprints → urban form → Urban Weather Generator → outdoor air "Site" and neighbour shading for the Home tab).
 
 ### How to Run
 Run all commands from the project root (`D:\IAAC\OASIS 2.0`) using the `.venv` Python environment (`.venv\Scripts\activate` or `.venv\Scripts\python.exe`):
@@ -49,6 +49,7 @@ Run all commands from the project root (`D:\IAAC\OASIS 2.0`) using the `.venv` P
 | Calibration round 4 (adopted) / Delhi check | `python calibrate_homes.py --airflow afn` / `... --validate Delhi` | `outputs/calibration/homes/afn/summary.json`, `afn_validate_delhi/` |
 | Evening check (measured evidence + model at the cut hour) / lag test | `python check_evening.py` / `python check_lag.py` | `outputs/evidence/` |
 | Recorded Chennai heatwave (download + .epw) / MVP headline run | `python get_heatwave.py` / `python run_heatwave.py` | `data/weather/chennai_heatwave.epw`, `outputs/heatwave/` |
+| Model error band + hottest week of each year 2016–2025 (baseline and every single change) | `python check_robustness.py` | `outputs/robustness/` |
 | City centre vs airport air (Nungambakkam vs Meenambakkam, measured) | `python check_city_weather.py` | `outputs/city_weather/` |
 | Recorded heatwave: airport / city wind / city centre / street AC +1 °C × power cut 20–21 h / none / at peak heat / 20–06 h / no power all week | `python run_scenarios.py` (after `check_city_weather.py`) | `outputs/scenarios/` |
 | Progress deck (numbers from outputs) | `python docs/deck/collect.py` then `node docs/deck/build.js` (needs pptxgenjs, react-icons, sharp; `PPTX_SKILL` for the theme step) | `docs/OASIS_2.0_progress.pptx` |

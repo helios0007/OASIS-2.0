@@ -340,6 +340,7 @@ b { font-weight: 600; }
 .score-num { font-size: 40px; line-height: 1; font-weight: 700; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
 .score-of { font-size: 12.5px; color: var(--muted-fg); }
 .score-verdict { margin-top: 5px; font-size: 12.5px; line-height: 1.45; color: var(--fg-2); }
+.score-range { margin: 2px 0 4px; font: 500 12px var(--mono); color: var(--muted-fg, inherit); opacity: .75; cursor: help; }
 .delta { font: 600 11px var(--mono); padding: 1px 6px; border-radius: 5px; margin-left: 6px; white-space: nowrap; }
 .up { color: var(--gain); }
 .down { color: var(--loss); }
@@ -558,12 +559,13 @@ b { font-weight: 600; }
 .u-center { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--viewport); }
 .u-map { flex: 1; min-height: 320px; position: relative; overflow: hidden; }
 .u-map .u-map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }   /* beats maplibre-gl.css (position: relative) */
-.u-map-tools { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; z-index: 2; }
-.u-tool { font: 500 12px/1 var(--sans, inherit); padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border); background: color-mix(in oklab, var(--card) 88%, transparent); color: var(--fg); cursor: pointer; }
-.u-tool[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-.u-map-hint { position: absolute; left: 10px; bottom: 30px; z-index: 2; margin: 0; padding: 7px 10px; border-radius: 6px; background: color-mix(in oklab, var(--card) 90%, transparent); color: var(--fg-2); border: 1px solid var(--border); }
-.u-map-hint[hidden] { display: none; }
-.u-map-layers { position: absolute; top: 46px; right: 10px; display: flex; gap: 4px; z-index: 2; flex-wrap: wrap; justify-content: flex-end; }
+/* Map toolbars: the Home viewport's components (.u-tools.card-glass in viewer3d.css, .tool above) */
+.u-map .u-views { z-index: 9; }                                              /* above the painted map (#px-wrap, 3) */
+.u-map .u-map-tools { left: auto; right: 10px; z-index: 2; }
+.u-map .u-map-layers { top: auto; bottom: 10px; left: 10px; z-index: 9; }
+.u-map[data-view="painted"] .u-map-tools { display: none; }           /* the painted map has its own tools in that corner */
+.u-map .u-map-hint { left: 10px; bottom: 52px; z-index: 9; margin: 0; padding: 7px 10px; color: var(--fg-2); }
+.u-map .u-map-hint[hidden] { display: none; }
 .u-tool:disabled { opacity: .45; cursor: default; }
 .nb-scale { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; vertical-align: middle; white-space: nowrap; margin-right: 6px; }
 .nb-scale span { display: inline-flex; align-items: center; gap: 4px; }
@@ -580,3 +582,22 @@ b { font-weight: 600; }
 .u-pick h3 { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
 .u-pick[hidden] { display: none; }
 .u-map.pixel canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+/* our own map's controls step aside for the two toolbars */
+.u-map .maplibregl-ctrl-top-left { top: 40px; }
+.u-map .maplibregl-ctrl-bottom-left, .u-map .maplibregl-ctrl-bottom-right { bottom: 40px; }
+
+/* Heat exposure index (urban.js: renderExposure, exposurePickHtml) */
+.x-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; border: 1px solid color-mix(in oklab, var(--fg) 25%, transparent); }
+.x-tiers { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; font-size: 12px; color: var(--fg-2); }
+.x-tiers b { font: 500 12px var(--mono); color: var(--fg); }
+.x-drivers { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.x-drivers li { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12.5px; color: var(--fg-2); cursor: help; }
+.x-drivers li span small { display: block; font-size: 11px; color: var(--muted-fg); }
+.x-drivers li > i { height: 6px; border-radius: 3px; background: var(--muted); overflow: hidden; }
+.x-drivers li > i u { display: block; height: 100%; background: var(--heat); }
+.x-drivers li b { font: 500 12px var(--mono); color: var(--fg); min-width: 34px; text-align: right; }
+.x-drivers li b small { font-weight: 400; color: var(--muted-fg); }
+.x-score { margin: 0 0 8px; font-size: 12.5px; color: var(--fg-2); }
+.x-score b { font: 600 19px var(--sans); color: var(--fg); letter-spacing: -0.02em; }
+.u-pick .x-drivers { margin-bottom: 10px; }
+.stat em .x-dot { margin-right: 4px; }
