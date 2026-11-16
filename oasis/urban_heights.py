@@ -138,15 +138,20 @@ def form(share, height, radius_m):
     }
 
 
-def obstructions(share, height):
-    """What stands around the site centre. For each of 16 bearings (degrees clockwise
-    from north): gap_m to the next building beyond the site's own, and its height_m
-    (None if nothing within RAY_M). Also the height of the building at the centre, if any."""
+def obstructions(share, height, x_m=0.0, y_m=0.0):
+    """What stands around a point (x_m east, y_m north of the site centre; the centre by
+    default). For each of 16 bearings (degrees clockwise from north): gap_m to the next
+    building beyond the point's own, its height_m (None if nothing within RAY_M) and
+    edge_m, the distance from the point to its own building's edge. Also the height of
+    the building at the point, if any."""
     h = solid(share, height)
     n = h.shape[0]
     c = (n - 1) / 2
-    at = lambda s, b: h[int(round(c - s * math.cos(math.radians(b)) / CELL_M)),
-                        int(round(c + s * math.sin(math.radians(b)) / CELL_M))]
+
+    def at(s, b):
+        i = int(round(c - (y_m + s * math.cos(math.radians(b))) / CELL_M))
+        j = int(round(c + (x_m + s * math.sin(math.radians(b))) / CELL_M))
+        return h[i, j] if 0 <= i < n and 0 <= j < n else 0.0        # beyond the grid: nothing known
     own = float(at(0, 0))                                    # 0 = the centre is open ground
     rays = []
     for b in BEARINGS:
@@ -157,11 +162,40 @@ def obstructions(share, height):
         while s <= RAY_M and at(s, b) == 0:                  # cross the open ground
             s += RAY_STEP_M
         if s > RAY_M:
-            rays.append({"bearing": b, "gap_m": None, "height_m": None})
+            rays.append({"bearing": b, "gap_m": None, "height_m": None, "edge_m": round(edge, 1)})
             continue
         ahead = [at(s + d, b) for d in np.arange(0, 12, RAY_STEP_M) if s + d <= RAY_M]
-        rays.append({"bearing": b, "gap_m": round(max(s - edge, RAY_STEP_M), 1), "height_m": round(float(max(ahead)), 1)})
+        rays.append({"bearing": b, "gap_m": round(max(s - edge, RAY_STEP_M), 1), "height_m": round(float(max(ahead)), 1),
+                     "edge_m": round(edge, 1)})
     return {"own_height_m": round(own, 1) if own > 0 else None, "rays": rays}
+
+
+def on_footprints(buildings, share, height):
+    """For the drawing: the satellite height of each street-map building (mean of the
+    built cells inside its outline, None if it has none), and the built cells that no
+    outline covers (the street map misses many buildings). buildings: urban.fetch_buildings."""
+    from matplotlib.path import Path
+
+    h = solid(share, height)
+    n = h.shape[0]
+    half = n * CELL_M / 2
+    xs = -half + (np.arange(n) + 0.5) * CELL_M           # cell centres, x east
+    ys = half - (np.arange(n) + 0.5) * CELL_M            # row 0 = north edge
+    loose, heights = h.copy(), []
+    for b in buildings:
+        xy = np.asarray(b["xy"], float)
+        cols = np.where((xs >= xy[:, 0].min()) & (xs <= xy[:, 0].max()))[0]
+        rows = np.where((ys >= xy[:, 1].min()) & (ys <= xy[:, 1].max()))[0]
+        if not len(cols) or not len(rows):
+            heights.append(None)
+            continue
+        X, Y = np.meshgrid(xs[cols], ys[rows])
+        inside = Path(xy).contains_points(np.column_stack([X.ravel(), Y.ravel()])).reshape(X.shape)
+        block = h[np.ix_(rows, cols)]
+        built = inside & (block > 0)
+        heights.append(round(float(block[built].mean()), 1) if built.any() else None)
+        loose[np.ix_(rows, cols)] = np.where(inside, 0.0, loose[np.ix_(rows, cols)])
+    return heights, loose
 
 
 def roughness(f):

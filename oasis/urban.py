@@ -30,6 +30,8 @@ from oasis import urban_heights
 
 OUT = config.OUT / "urban"
 SITE = OUT / "site.json"
+CARTO_KEY_FILE = config.ROOT / "carto_key.txt"
+OVERTURE_FALLBACK = "2026-10-21.0"
 OVERPASS = ["https://overpass-api.de/api/interpreter"] * 4 + ["https://overpass.kumi.systems/api/interpreter"]
 BACKOFF_S = 6             # s; wait 0, 6, 12, 18, 24 s before the successive tries
 FLOOR_M = 3.0             # m per storey, to turn storeys into height (assumed)
@@ -50,6 +52,36 @@ PLACES = [
 
 
 # ---------- map -> buildings ----------
+
+def carto_key():
+    """The user's CARTO basemap key, or None: environment variable OASIS_CARTO_KEY, else the
+    first line of carto_key.txt in the project folder (not in git). Without a key the map
+    is drawn from OpenFreeMap alone."""
+    import os
+    key = os.environ.get("OASIS_CARTO_KEY", "").strip()
+    if not key and CARTO_KEY_FILE.exists():
+        lines = CARTO_KEY_FILE.read_text(encoding="utf-8").split()
+        key = lines[0] if lines else ""
+    return key or None
+
+
+def overture_release():
+    """Name of the newest Overture Maps release (its building tiles are the map's footprints).
+    Asked once a day; the last known name is used if the catalogue cannot be reached."""
+    OUT.mkdir(parents=True, exist_ok=True)
+    cache = OUT / "overture_release.json"
+    known = json.loads(cache.read_text()) if cache.exists() else {"release": OVERTURE_FALLBACK, "day": ""}
+    if known["day"] != str(date.today()):
+        try:
+            reply = requests.get("https://stac.overturemaps.org/catalog.json", timeout=15,
+                                 headers={"User-Agent": "urban-form-research-client"})
+            reply.raise_for_status()
+            known = {"release": reply.json()["latest"], "day": str(date.today())}
+            cache.write_text(json.dumps(known))
+        except (requests.RequestException, ValueError, KeyError):
+            pass
+    return known["release"]
+
 
 def fetch_buildings(lat, lon, radius_m):
     """Building outlines within radius_m of the point, in metres east/north of it.
@@ -206,7 +238,8 @@ def urban_air(form, tree_cover, grass_cover, epw_out):
         shutil.rmtree(work, ignore_errors=True)
 
 
-def make_site(name, lat, lon, radius_m, form, tree_cover, grass_cover, default_storeys, surroundings=None):
+def make_site(name, lat, lon, radius_m, form, tree_cover, grass_cover, default_storeys, surroundings=None, green_source="typed",
+              building=None):
     """Urban air for one place, saved as the current site (the "site" weather case).
     surroundings: urban_heights.obstructions(...) for neighbour shading, or None."""
     inputs = {"name": name, "lat": lat, "lon": lon, "radius_m": radius_m, "form": form,
@@ -223,7 +256,9 @@ def make_site(name, lat, lon, radius_m, form, tree_cover, grass_cover, default_s
             "max_c": max(delta), "max_hour": delta.index(max(delta)),
             "surroundings": surroundings,
             "roughness": urban_heights.roughness(form),
-            "assumptions": assumptions(form, default_storeys, tree_cover, grass_cover)}
+            "green_source": green_source,
+            "building": building,          # the building picked on the map: {"x_m", "y_m", "height_m", "storeys"}, or None
+            "assumptions": assumptions(form, default_storeys, tree_cover, grass_cover, green_source)}
     SITE.write_text(json.dumps(site, indent=2))
     for old in epw.parent.glob("chennai_heatwave_site_*.epw"):     # keep only the current site's file
         if old != epw:
@@ -231,7 +266,7 @@ def make_site(name, lat, lon, radius_m, form, tree_cover, grass_cover, default_s
     return site
 
 
-def assumptions(form, default_storeys, tree_cover, grass_cover):
+def assumptions(form, default_storeys, tree_cover, grass_cover, green_source="typed"):
     """What the urban result rests on, each tagged Mapped / Typed in / Assumed."""
     untagged = 1 - form.get("height_tagged_share", 0)
     if form.get("source") == "satellite":
@@ -245,8 +280,11 @@ def assumptions(form, default_storeys, tree_cover, grass_cover):
             {"status": "Typed in", "text": f"Building height: {untagged:.0%} of the built area has no height on the map and uses {default_storeys:g} storeys × {FLOOR_M:g} m."},
             {"status": "Assumed", "text": "Facade area counts every outside edge, so walls shared by row houses are overcounted."},
         ]
+    green = ({"status": "Satellite", "text": f"Tree cover {tree_cover:.0%}: canopy 3 m or taller on the Meta / WRI canopy height map (1 m; a model estimate from satellite images taken between 2009 and 2020, height error about 2.8 m). Grass cover {grass_cover:.0%}: ESA WorldCover 2021 (10 m), which misses small lawns."}
+             if green_source == "satellite" else
+             {"status": "Typed in", "text": f"Tree cover {tree_cover:.0%}, grass cover {grass_cover:.0%}."})
     return shape + [
-        {"status": "Typed in", "text": f"Tree cover {tree_cover:.0%}, grass cover {grass_cover:.0%}."},
+        green,
         {"status": "Assumed", "text": f"The city's buildings are UWG's US reference mid-rise flats (post-1980, air-conditioned); street heat {SENS_ANTH_W_M2} W/m²."},
         {"status": "Assumed", "text": "No sea breeze. Wind speed stays as at the airport: the home model's airflow was already fitted to homes in dense streets, so the roof-level wind shown here is for information only."},
         {"status": "Assumed", "text": "Not checked against a Chennai street measurement."},
@@ -261,7 +299,8 @@ def surroundings_for_home():
     if not s or not s.get("surroundings"):
         return None
     around = s["surroundings"]
-    return {"rays": around["rays"], "building_m": around.get("own_height_m") or s["default_storeys"] * FLOOR_M}
+    picked = (s.get("building") or {}).get("height_m")
+    return {"rays": around["rays"], "building_m": picked or around.get("own_height_m") or s["default_storeys"] * FLOOR_M}
 
 
 def site():

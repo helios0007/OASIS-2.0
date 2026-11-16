@@ -37,6 +37,7 @@ from oasis.assess import assess, assess_packages, single_changes
 from oasis import costs
 from oasis import outages
 from oasis import urban
+from oasis import urban_env
 from oasis import urban_heights
 from oasis.box_view import box_unit
 from oasis.build_idf import (
@@ -289,12 +290,18 @@ class UrbanRun(Place):
     buildings: Optional[int] = None
     height_tagged_share: float = Field(0, ge=0, le=1)
     source: str = Field("map", pattern="^(map|satellite|typed)$")
+    green_source: str = Field("typed", pattern="^(satellite|typed)$")   # where tree and grass cover came from
+    # the building picked on the map (metres east / north of the centre); None = the site centre
+    focus_x_m: Optional[float] = Field(None, ge=-560, le=560)
+    focus_y_m: Optional[float] = Field(None, ge=-560, le=560)
+    building_height_m: Optional[float] = Field(None, ge=2, le=200)
 
 
 @app.get("/api/urban")
 def urban_state():
     """Preset places and the neighbourhood currently handed to the home model."""
-    return {"places": urban.PLACES, "site": urban.site(), "floor_m": urban.FLOOR_M}
+    return {"places": urban.PLACES, "site": urban.site(), "floor_m": urban.FLOOR_M, "carto_key": urban.carto_key(),
+            "overture_release": urban.overture_release()}
 
 
 @app.post("/api/urban/map")
@@ -302,7 +309,7 @@ def urban_map(place: Place):
     """The place as the data shows it: urban form and neighbours from the satellite
     building heights, street-map footprints for the drawing. If the satellite data
     cannot be read, the street map gives the form (with typed-in storeys)."""
-    notes, buildings, grid, around = [], [], None, None
+    notes, buildings, grid, around, roof_m = [], [], None, None, None
     try:
         buildings = urban.fetch_buildings(place.lat, place.lon, place.radius_m)
         osm_form = urban.morphology(buildings, place.radius_m, place.default_storeys)
@@ -315,15 +322,24 @@ def urban_map(place: Place):
         around = urban_heights.obstructions(share, height)
         grid = {"cell_m": urban_heights.CELL_M, "half_m": place.radius_m + urban_heights.MARGIN_M,
                 "heights": [[int(round(v)) for v in row] for row in urban_heights.solid(share, height)]}
+        if buildings:                        # for the drawing: heights on the real outlines, cells where no outline exists
+            roof_m, loose = urban_heights.on_footprints(buildings, share, height)
+            grid["loose"] = [[int(round(v)) for v in row] for row in loose]
     except Exception as error:
         notes.append(f"Satellite building heights not available ({str(error).splitlines()[0]}).")
         form = osm_form
     if form is None:
         raise HTTPException(502, " ".join(notes))
-    return {"form": form, "osm_form": osm_form, "grid": grid, "surroundings": around, "notes": notes,
+    env, env_notes = urban_env.read_all(place.lat, place.lon, place.radius_m)    # sky view, sun, land cover, surface temperature
+    if grid is None:
+        env["sky"] = None                                                         # needs the satellite heights
+        env_notes = [n for n in env_notes if not n.startswith("Sky view")]
+    notes += env_notes
+    return {"form": form, "osm_form": osm_form, "grid": grid, "surroundings": around, "notes": notes, "env": env,
             "roughness": urban_heights.roughness(form),
             "buildings": [{"xy": [[round(x, 1), round(y, 1)] for x, y in b["xy"]], "height_m": b.get("height_m"),
-                           "tagged": b["height_tag"] is not None, "inside": b.get("inside", False)} for b in buildings]}
+                           "tagged": b["height_tag"] is not None, "inside": b.get("inside", False),
+                           "sat_height_m": roof_m[i] if roof_m else None} for i, b in enumerate(buildings)]}
 
 
 @app.post("/api/urban/run")
@@ -334,13 +350,18 @@ def urban_run(run: UrbanRun):
             "height_tagged_share": run.height_tagged_share}
     around = None
     try:                                     # neighbours come from the cached satellite grid of this place
-        around = urban_heights.obstructions(*urban_heights.height_grid(run.lat, run.lon, run.radius_m))
+        around = urban_heights.obstructions(*urban_heights.height_grid(run.lat, run.lon, run.radius_m),
+                                            run.focus_x_m or 0.0, run.focus_y_m or 0.0)
     except Exception:
         pass
+    building = None
+    if run.focus_x_m is not None and run.focus_y_m is not None and run.building_height_m:
+        building = {"x_m": run.focus_x_m, "y_m": run.focus_y_m, "height_m": run.building_height_m,
+                    "storeys": max(1, round(run.building_height_m / urban.FLOOR_M))}
     with SIMULATION_LOCK:
         try:
             site = urban.make_site(run.name, run.lat, run.lon, run.radius_m, form,
-                                   run.tree_cover, run.grass_cover, run.default_storeys, around)
+                                   run.tree_cover, run.grass_cover, run.default_storeys, around, run.green_source, building)
         except Exception as error:
             raise HTTPException(500, f"The urban model failed: {str(error).splitlines()[0]}")
     return {"site": site, "weather": {"key": "site", **urban.site_weather(), "available": True}}

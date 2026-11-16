@@ -1,7 +1,7 @@
-weather,design,hours_total,safe_hours,danger_hours,cut_hours_in_danger,degree_hours_over_limit,max_heat_index_c,max_indoor_temp_c,mean_indoor_temp_c,nights_cut_in_danger,cut_max_heat_index_c,worst_hour_for_cut,typical_peak_hour,outdoor_hours_over_limit,outdoor_mean_heat_index_c
-typical year (TMYx 10-16 May),top floor,168,163,5,3,13.1,46.7,37.8,34.5,3,42.2,18,14,14,36.5
-typical year (TMYx 10-16 May),middle floor,168,166,2,0,8.8,45.5,36.6,33.7,0,40.8,18,14,14,36.5
-typical year (TMYx 10-16 May),"top floor, windows shut at night (not validated)",168,117,51,5,164.8,48.6,38.3,35.9,5,42.8,0,14,14,36.5
-recorded (2024-05-01 to 2024-05-07),top floor,168,59,109,7,284.2,50.0,38.5,35.4,7,50.0,13,14,152,45.1
-recorded (2024-05-01 to 2024-05-07),middle floor,168,95,73,7,183.8,48.4,37.3,34.5,7,48.4,13,12,152,45.1
-recorded (2024-05-01 to 2024-05-07),"top floor, windows shut at night (not validated)",168,10,158,7,1501.0,75.9,39.2,36.9,7,50.7,3,0,152,45.1
+weather,design,hours_total,safe_hours,danger_hours,cut_hours_in_danger,safe_hours_measured_cuts,degree_hours_over_limit,max_heat_index_c,max_indoor_temp_c,mean_indoor_temp_c,safe_hours_extended_hi,max_extended_hi_c,hazard_hours_ch,hours_to_elderly_limit,hours_to_young_limit,max_hi_over_limit,band_below_caution_h,band_caution_h,band_extreme_caution_h,band_danger_h,band_extreme_danger_h,nights_cut_in_danger,cut_max_heat_index_c,worst_hour_for_cut,typical_peak_hour,outdoor_hours_over_limit,outdoor_mean_heat_index_c
+typical year (TMYx 10-16 May),top floor,168,163,5,3,165.1,13.1,46.7,37.8,34.5,164,52.1,1139.0,125,,False,0,45,118,5,0,3,42.2,18,14,14,36.5
+typical year (TMYx 10-16 May),middle floor,168,166,2,0,165.6,8.8,45.5,36.6,33.7,166,49.4,1010.0,142,,False,0,66,100,2,0,0,40.8,18,14,14,36.5
+typical year (TMYx 10-16 May),"top floor, windows shut at night (not validated)",168,117,51,5,120.6,164.8,48.6,38.3,35.9,118,59.5,1832.0,74,105.0,False,0,8,109,51,0,5,42.8,0,14,14,36.5
+recorded (2024-05-01 to 2024-05-07),top floor,168,59,109,7,60.1,284.2,50.0,38.5,35.4,77,61.1,2583.0,56,77.0,False,0,0,59,109,0,7,50.0,13,14,152,45.1
+recorded (2024-05-01 to 2024-05-07),middle floor,168,95,73,7,95.8,183.8,48.4,37.3,34.5,108,60.1,2397.0,61,85.0,False,0,0,95,73,0,7,48.4,13,12,152,45.1
+recorded (2024-05-01 to 2024-05-07),"top floor, windows shut at night (not validated)",168,10,158,7,10.6,1501.0,75.9,39.2,36.9,20,81.7,3849.0,35,50.0,True,0,0,10,111,47,7,50.7,3,0,152,45.1

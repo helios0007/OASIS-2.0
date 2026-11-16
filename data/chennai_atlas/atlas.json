@@ -1,0 +1,63 @@
+{
+  "made": "2026-11-16",
+  "crs": "EPSG:32644",
+  "cell_m": 100,
+  "box_wgs84": [
+    80.13,
+    12.83,
+    80.34,
+    13.25
+  ],
+  "left": 405500,
+  "top": 1465000,
+  "columns": [
+    "built_share",
+    "building_height_m",
+    "facade_to_site",
+    "tree_cover",
+    "tree_height_m",
+    "sky_view",
+    "sun_hours",
+    "sky_view_no_trees",
+    "sun_hours_no_trees",
+    "cover_tree",
+    "cover_low_green",
+    "cover_water",
+    "cover_built",
+    "cover_bare",
+    "surface_temp_c"
+  ],
+  "cells_with_data": 107180,
+  "settings": {
+    "open_buildings_year": 2023,
+    "presence_min": 0.5,
+    "buildings_read_at_m": 2.0,
+    "working_grid_m": 4,
+    "tree_min_m": 3.0,
+    "look_m": 60.0,
+    "sun_day_of_year": 125,
+    "worldcover_year": 2021
+  },
+  "landsat": {
+    "scene": "LC08_L2SP_142051_20240429_02_T1",
+    "datetime_utc": "2024-04-29T04:57:53.702433Z",
+    "scene_cloud_pct": 4.53
+  },
+  "means": {
+    "built_share": 0.101,
+    "building_height_m": 7.232,
+    "facade_to_site": 0.172,
+    "tree_cover": 0.052,
+    "tree_height_m": 4.971,
+    "sky_view": 0.871,
+    "sun_hours": 10.394,
+    "sky_view_no_trees": 0.943,
+    "sun_hours_no_trees": 11.272,
+    "cover_tree": 0.154,
+    "cover_low_green": 0.18,
+    "cover_water": 0.303,
+    "cover_built": 0.348,
+    "cover_bare": 0.015,
+    "surface_temp_c": 41.357
+  }
+}

@@ -7,8 +7,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="style.css?v=8.2">
+  <link rel="stylesheet" href="style.css?v=8.9">
   <link rel="stylesheet" href="viewer3d.css?v=8.0">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
+  <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/pmtiles@3.2.0/dist/pmtiles.js"></script>
   <script type="importmap">
   { "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -41,8 +44,8 @@
   <header class="titlebar">
     <button type="button" class="brand" id="home" aria-label="Back to the intro">OASIS <span class="hot">2.0</span></button>
     <div class="modes" role="tablist" aria-label="Scale">
-      <button type="button" role="tab" class="mode" data-mode="home" aria-selected="true">Home</button>
-      <button type="button" role="tab" class="mode" data-mode="urban" aria-selected="false">Neighbourhood</button>
+      <button type="button" role="tab" class="mode" data-mode="urban" aria-selected="true">1 · Neighbourhood</button>
+      <button type="button" role="tab" class="mode" data-mode="home" aria-selected="false">2 · Home</button>
     </div>
     <span class="doc" id="doc-name">Single room</span>
 
@@ -291,16 +294,38 @@
             <button type="button" class="btn btn-primary u-wide" id="u-run" disabled>Run urban model</button>
           </div>
         </details>
+        <details class="sec" open>
+          <summary>Environment</summary>
+          <div class="sec-body"><ul class="u-list sm" id="u-env"></ul></div>
+        </details>
       </form>
     </aside>
 
     <section class="center u-center">
-      <div class="u-map" id="u-map"><p class="muted" id="u-map-empty">Pick a place and read the map to see its buildings.</p></div>
+      <div class="u-map" id="u-map">
+        <div class="u-map-canvas" id="u-map-canvas"></div>
+        <div class="u-map-tools" role="group" aria-label="Map layers">
+          <button type="button" class="u-tool" data-base="minimal" aria-pressed="true">Minimal</button>
+          <button type="button" class="u-tool" data-base="sat" aria-pressed="false">Satellite</button>
+          <button type="button" class="u-tool" id="u-ctx" aria-pressed="true">City in 3D</button>
+          <button type="button" class="u-tool" id="u-tilt" aria-pressed="true">Isometric</button>
+          <button type="button" class="u-tool" id="u-pixel" aria-pressed="false">Pixel</button>
+        </div>
+        <div class="u-map-layers" role="group" aria-label="What the map shows">
+          <button type="button" class="u-tool" data-layer="heights" aria-pressed="true" disabled>Building heights</button>
+          <button type="button" class="u-tool" data-layer="sky" aria-pressed="false" disabled>Sky view</button>
+          <button type="button" class="u-tool" data-layer="sun" aria-pressed="false" disabled>Sun hours</button>
+          <button type="button" class="u-tool" data-layer="cover" aria-pressed="false" disabled>Land cover</button>
+          <button type="button" class="u-tool" data-layer="surface" aria-pressed="false" disabled>Ground temperature</button>
+        </div>
+        <p class="u-map-hint sm" id="u-map-empty">Click the map to place the site, then <b>Read the map</b>.</p>
+      </div>
       <p class="u-map-key sm muted" id="u-map-key"></p>
     </section>
 
     <aside class="panel right" aria-label="Urban result">
       <div class="panel-title"><span>Outdoor air at this place</span></div>
+      <div class="u-pick" id="u-pick" hidden></div>
       <div class="panel-scroll u-result" id="u-result">
         <p class="muted sm lead">The urban model turns the airport heatwave week into the air of this street. The result is handed to the Home tab as the outdoor air "Site".</p>
       </div>
@@ -341,8 +366,8 @@
 <!-- Toasts -->
 <ol class="toaster" id="toaster" aria-live="polite"></ol>
 
-<script src="app.js?v=8.3"></script>
-<script src="urban.js?v=8.4"></script>
+<script src="app.js?v=8.4"></script>
+<script src="urban.js?v=10.2"></script>
 <script type="module" src="viewer3d.js?v=8.0"></script>
 </body>
 </html>

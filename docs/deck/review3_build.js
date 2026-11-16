@@ -172,6 +172,11 @@ const hours = [...Array(24).keys()].map(h => String(h).padStart(2, "0"));
   text(s, "in danger, of 168 hours in the week", { x: 4.35, y: 6.08, w: 4, h: 0.33, fontSize: 12, italic: true, valign: "middle" });
   text(s, `Same home, same air temperature (${D.weather.typical.mean_temp_c} vs ${D.weather.recorded.mean_temp_c} °C). Station: Meenambakkam.`,
     { x: 0.6, y: 6.6, w: 9.5, h: 0.3, fontSize: 11, italic: true, color: GREY });
+  // Second headline: power cuts only as often as measured (Prayas ESMI, Chennai, April-June)
+  if (recorded.safe_hours_measured_cuts != null)
+    text(s, [{ text: "Cut every evening = stress case. ", options: { bold: true } },
+             { text: `With cuts only as often as measured in Chennai: ${Math.round(recorded.safe_hours_measured_cuts)} safe hours.` }],
+      { x: 0.6, y: 5.5, w: 9.0, h: 0.4, fontSize: 13, italic: true, valign: "middle" });
 }
 
 // ---- 5 the week hour by hour ----------------------------------------------
@@ -374,16 +379,18 @@ const barLabels = { showValue: true, dataLabelPosition: "outEnd", dataLabelColor
   };
   big(0.6, `${noCut.safe_hours - base.safe_hours}`, "h", `What the nightly cut removes: ${noCut.safe_hours} safe hours without it, ${base.safe_hours} with it`);
   big(6.8, `${base.cut_max_heat_index_c.toFixed(0)}`, "°C", `Felt heat in the cut hour: the week's maximum, above the limit on ${base.nights_cut_in_danger} nights of 7`);
-  text(s, [{ text: "My answer: ", options: { bold: true, color: ORANGE } }, { text: `the heatwave sets how many hours are dangerous; the cut decides how bad the worst hour is. And a longer outage is another matter: ${R.outage[2].safe_hours} safe hours with no fan through the night, ${R.outage[3].safe_hours} with no power all week.` }],
-    { x: 0.6, y: 4.62, w: 12.1, h: 0.75, fontSize: 15, valign: "middle" });
+  const measured = recorded.safe_hours_measured_cuts != null
+    ? ` With cuts only as often as measured in Chennai: ${Math.round(recorded.safe_hours_measured_cuts)} safe hours.` : "";
+  text(s, [{ text: "My answer: ", options: { bold: true, color: ORANGE } }, { text: `the heatwave sets how many hours are dangerous; the cut decides how bad the worst hour is.${measured} A longer outage is another matter: ${R.outage[2].safe_hours} safe hours with no fan through the night, ${R.outage[3].safe_hours} with no power all week.` }],
+    { x: 0.6, y: 4.58, w: 12.1, h: 0.85, fontSize: 14, valign: "middle" });
   const more = [
     ["“Calibrated in Dhaka, not Chennai.”", `Evening error ${one(dhaka.evening_err_c)} °C in ${R.dhaka_homes} homes; Chennai loggers planned for 2027.`],
     ["“The result depends on your threshold.”", `${base.safe_hours} safe hours on the NWS heat index, ${base.safe_hours_extended_hi} on the extended one. I keep the cautious one.`],
   ];
   more.forEach(([q, a], i) => {
     const x = 0.6 + i * 6.2;
-    text(s, q, { x, y: 5.45, w: 5.9, h: 0.35, fontSize: 13, bold: true });
-    text(s, a, { x, y: 5.82, w: 5.6, h: 0.7, fontSize: 12, italic: true, color: GREY });
+    text(s, q, { x, y: 5.62, w: 5.9, h: 0.35, fontSize: 13, bold: true });
+    text(s, a, { x, y: 5.99, w: 5.6, h: 0.6, fontSize: 12, italic: true, color: GREY });
   });
 }
 

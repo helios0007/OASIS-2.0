@@ -94,6 +94,22 @@ def cut_days(ev):
     return len(ev.assign(day=ev["start"].dt.normalize())[["monitor", "day"]].drop_duplicates())
 
 
+def off_by_hour(ev, days):
+    """Share of monitor-days on which the power was off at some point in each hour
+    of the day (0-23). A cut covers every hour it touches, so a 90-minute cut from
+    19:50 counts in 19, 20 and 21 h. This is what the hourly model can use: a cut
+    in an hour means no fan in that hour."""
+    if not len(ev):
+        return [0.0] * 24
+    end = ev["start"] + pd.to_timedelta(ev["minutes"] - 1, unit="m")
+    hours = [pd.date_range(s.floor("h"), e.floor("h"), freq="h") for s, e in zip(ev["start"], end)]
+    touched = pd.DataFrame({"monitor": ev["monitor"].repeat([len(h) for h in hours]).to_numpy(),
+                            "t": np.concatenate([h.to_numpy() for h in hours])})
+    touched = touched.drop_duplicates()                     # one count per monitor and clock hour
+    counts = touched["t"].dt.hour.value_counts().reindex(range(24), fill_value=0)
+    return [round(float(n) / days, 4) for n in counts]
+
+
 def profile(series, months=HOT_MONTHS):
     """Outage statistics for the given months (None = the whole record).
     series: one minute series, or a list of them (one per monitor). With several
@@ -126,6 +142,7 @@ def profile(series, months=HOT_MONTHS):
         "evening_duration_min_median": float(evening["minutes"].median()) if len(evening) else None,
         "evening_duration_min_p90": float(evening["minutes"].quantile(0.9)) if len(evening) else None,
         "starts_by_hour": [int(n) for n in by_hour],
+        "share_of_days_off_by_hour": off_by_hour(ev, days),
         "most_common_start_hour": int(by_hour.idxmax()) if len(ev) else None,
     }
 

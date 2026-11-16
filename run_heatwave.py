@@ -107,7 +107,7 @@ def main():
          "results": rows}, indent=2))
     plot(hourly, OUT / "heat_index_weeks.png")
     pd.set_option("display.width", 250)
-    print(table[["weather", "design", "safe_hours", "danger_hours", "nights_cut_in_danger",
+    print(table[["weather", "design", "safe_hours", "safe_hours_measured_cuts", "danger_hours", "nights_cut_in_danger",
                  "cut_max_heat_index_c", "max_heat_index_c", "worst_hour_for_cut",
                  "outdoor_hours_over_limit", "outdoor_mean_heat_index_c"]].to_string(index=False))
 

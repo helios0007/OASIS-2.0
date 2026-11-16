@@ -97,6 +97,19 @@ def cut_hours_list(start_hour, length_h=1):
     return sorted({(int(start_hour) + i) % 24 for i in range(max(1, min(24, int(length_h))))})
 
 
+_OFF_BY_HOUR = []   # cached [list] or [None] after the first read
+
+
+def measured_off_by_hour():
+    """Measured share of hot-season days with no power in each hour (0-23), from
+    get_outages.py's summary; None when that has not been run."""
+    if not _OFF_BY_HOUR:
+        from oasis import outages
+        m = outages.measured()
+        _OFF_BY_HOUR.append((m or {}).get("hot_season", {}).get("share_of_days_off_by_hour"))
+    return _OFF_BY_HOUR[0]
+
+
 def column(df, text):
     """The first column whose name contains `text`."""
     return df[[c for c in df.columns if text in c][0]]
@@ -126,11 +139,27 @@ def safe_hours(csv_path, cut_hours=None):
     danger = hi >= SAFE_LIMIT_C
     hi_ext = pd.Series(heat_index_ext_c(t_felt, rh))        # cross-check, same limit
 
+    # Second headline: power cuts as often as they were measured (Prayas ESMI,
+    # Chennai, April-June), not every evening. In each hour of the day the fan is
+    # off with the measured share of days that had a cut in that hour; the result
+    # is the expected number of safe hours in the week. A cut anywhere in an hour
+    # counts as no fan for that whole hour (the model is hourly), so this leans safe.
+    off = measured_off_by_hour()
+    if off is not None:
+        fan = fan_credit_c(t, t_mrt, rh)
+        safe_on = heat_index_c(t - fan, rh) < SAFE_LIMIT_C
+        safe_off = heat_index_c(t, rh) < SAFE_LIMIT_C
+        p = hour.map(lambda h: off[h]).to_numpy()
+        measured_cut_safe = round(float(((1 - p) * safe_on + p * safe_off).sum()), 1)
+    else:
+        measured_cut_safe = None
+
     summary = {
         "hours_total": len(df),
         "safe_hours": int((~danger).sum()),
         "danger_hours": int(danger.sum()),
         "cut_hours_in_danger": int((danger & cut).sum()),
+        "safe_hours_measured_cuts": measured_cut_safe,
         "degree_hours_over_limit": round(float((hi - SAFE_LIMIT_C).clip(lower=0).sum()), 1),
         "max_heat_index_c": round(float(hi.max()), 1),
         "max_indoor_temp_c": round(float(t.max()), 1),

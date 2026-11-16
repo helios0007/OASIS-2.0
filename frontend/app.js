@@ -152,7 +152,7 @@ function enterApp(thenPickFile) {
     $("app").classList.add("entering");
     window.scrollTo(0, 0);
     if (result) { renderStrip(); renderChart(); setHour(hour); }     // sized now that the workspace is visible
-    if (thenPickFile) $("file").click();
+    if (thenPickFile) { setMode("home"); $("file").click(); }
   }, 200);
 }
 function showIntro() {
@@ -666,9 +666,13 @@ function renderScore() {
     ? `<div class="stat"><span>Power-cut hours in danger</span><b>${s.cut_hours_in_danger}<small> of ${cutTotal}</small></b><em>${p.cut.length_h >= 24 ? "no power all week" : `${pad(p.cut.start_hour)}:00–${pad(p.cut.end_hour % 24)}:00`}, fan off</em></div>`
     : `<div class="stat"><span>Power cut</span><b>none</b><em>fans run every hour</em></div>`;
   const ext = s.safe_hours_extended_hi;
+  // Second headline: cuts only as often as measured in Chennai (Prayas ESMI), not the chosen scenario
+  const measuredStat = s.safe_hours_measured_cuts === null || s.safe_hours_measured_cuts === undefined ? ""
+    : `<div class="stat" title="Expected safe hours if the fan is off only as often as power was measured to be off in each hour of the day (Prayas ESMI voltage records, Chennai, April–June). A cut anywhere in an hour counts as no fan for that hour."><span>With cuts as measured</span><b>${Math.round(s.safe_hours_measured_cuts)}<small> h safe</small></b><em>main score = stress case</em></div>`;
   $("stats").innerHTML = `
     <div class="stat"><span>Hours in danger</span><b>${s.danger_hours}<small> h</small></b><em>felt heat ≥ ${lim} °C</em></div>
     ${cutStat}
+    ${measuredStat}
     <div class="stat"><span>Peak felt heat</span><b>${s.max_heat_index_c}<small> °C</small></b><em>${p ? `room hottest around ${pad(p.normal.typical_hour)}:00` : "heat index"}</em></div>
     <div class="stat"><span>Peak indoor air</span><b>${s.max_indoor_temp_c}<small> °C</small></b><em>mean ${s.mean_indoor_temp_c} °C</em></div>
     <div class="stat"><span>Heat over the limit</span><b>${Math.round(s.degree_hours_over_limit)}<small> °C·h</small></b><em>degree-hours above ${lim} °C</em></div>

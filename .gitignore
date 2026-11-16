@@ -45,3 +45,6 @@ data/outages/
 outputs/urban/
 # Urban tab: the current site's weather file (remade by Run urban model)
 outputs/weather_cases/chennai_heatwave_site_*.epw
+
+# Map key (personal)
+carto_key.txt
